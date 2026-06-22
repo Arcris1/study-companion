@@ -79,7 +79,7 @@ class OpenAiClient {
     );
     request.headers.addAll(_headers);
     request.body = jsonEncode({
-      'model': AppConfig.openAiChatModel,
+      'model': AiConfig.instance.chatModel,
       'messages': messages,
       'max_tokens': maxTokens,
       'temperature': temperature,
