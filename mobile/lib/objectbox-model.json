@@ -1,0 +1,608 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:1046454580701227023",
+      "lastPropertyId": "7:1461084510288695497",
+      "name": "ChatMessageModel",
+      "properties": [
+        {
+          "id": "1:7269846942866543983",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5480286061346078278",
+          "name": "sessionId",
+          "type": 6
+        },
+        {
+          "id": "3:8884856767995537327",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "4:1203525895428921182",
+          "name": "isUser",
+          "type": 1
+        },
+        {
+          "id": "5:5288636324990732128",
+          "name": "sourceChunksJson",
+          "type": 9
+        },
+        {
+          "id": "6:2770223527905720367",
+          "name": "createdAt",
+          "type": 12
+        },
+        {
+          "id": "7:1461084510288695497",
+          "name": "sourceChunks",
+          "type": 30
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:4506380483333451149",
+      "lastPropertyId": "5:9197382391278356048",
+      "name": "ChatSessionModel",
+      "properties": [
+        {
+          "id": "1:165514007843395364",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2204005737498409064",
+          "name": "notebookId",
+          "type": 6
+        },
+        {
+          "id": "3:3705874362717506980",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:4592568024335396645",
+          "name": "createdAt",
+          "type": 12
+        },
+        {
+          "id": "5:9197382391278356048",
+          "name": "updatedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:9032768762954709459",
+      "lastPropertyId": "5:1236417375188136629",
+      "name": "NoteChunkModel",
+      "properties": [
+        {
+          "id": "1:5189973311244807839",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7248010236840886044",
+          "name": "noteId",
+          "type": 6
+        },
+        {
+          "id": "3:1837519579036404184",
+          "name": "text",
+          "indexId": "1:1314234798251966888",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:7039298164604881050",
+          "name": "chunkIndex",
+          "type": 6
+        },
+        {
+          "id": "5:1236417375188136629",
+          "name": "embedding",
+          "indexId": "2:7564743392253910987",
+          "type": 28,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:639880327650542879",
+      "lastPropertyId": "11:7074739352079450105",
+      "name": "NoteModel",
+      "properties": [
+        {
+          "id": "1:7493085967903969016",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1868132970632316320",
+          "name": "notebookId",
+          "type": 6
+        },
+        {
+          "id": "3:6791199383758685987",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:3436965771167809852",
+          "name": "rawText",
+          "type": 9
+        },
+        {
+          "id": "5:2307671590052900693",
+          "name": "summary",
+          "type": 9
+        },
+        {
+          "id": "6:3048807630202647373",
+          "name": "statusStr",
+          "type": 9
+        },
+        {
+          "id": "7:3294796909752148260",
+          "name": "sourceType",
+          "type": 9
+        },
+        {
+          "id": "8:5976698569142599888",
+          "name": "sourcePath",
+          "type": 9
+        },
+        {
+          "id": "9:7332125394709273695",
+          "name": "chunkCount",
+          "type": 6
+        },
+        {
+          "id": "10:8594773664290871228",
+          "name": "createdAt",
+          "type": 12
+        },
+        {
+          "id": "11:7074739352079450105",
+          "name": "updatedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:3792066214926863363",
+      "lastPropertyId": "6:1033064756244229920",
+      "name": "NotebookModel",
+      "properties": [
+        {
+          "id": "1:6252830764123975353",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7642281792414701993",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "3:5183090306782685205",
+          "name": "description",
+          "type": 9
+        },
+        {
+          "id": "4:5709763527111767446",
+          "name": "color",
+          "type": 9
+        },
+        {
+          "id": "5:1078540705443708204",
+          "name": "createdAt",
+          "type": 12
+        },
+        {
+          "id": "6:1033064756244229920",
+          "name": "updatedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "6:6451964896982366558",
+      "lastPropertyId": "6:2270742427004128167",
+      "name": "QuizAttemptModel",
+      "properties": [
+        {
+          "id": "1:499659321504218885",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1522018494050414439",
+          "name": "quizId",
+          "type": 6
+        },
+        {
+          "id": "3:3858997276387733012",
+          "name": "score",
+          "type": 6
+        },
+        {
+          "id": "4:7864383946641971957",
+          "name": "totalQuestions",
+          "type": 6
+        },
+        {
+          "id": "5:3883116116647917663",
+          "name": "answersJson",
+          "type": 9
+        },
+        {
+          "id": "6:2270742427004128167",
+          "name": "completedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "7:2613755880110159420",
+      "lastPropertyId": "7:5808929008602838097",
+      "name": "QuizModel",
+      "properties": [
+        {
+          "id": "1:8202699155566821790",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6955556649583548946",
+          "name": "notebookId",
+          "type": 6
+        },
+        {
+          "id": "3:5852971750928200079",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:647950322455089973",
+          "name": "questionTypeStr",
+          "type": 9
+        },
+        {
+          "id": "5:7182485958758857843",
+          "name": "difficultyStr",
+          "type": 9
+        },
+        {
+          "id": "6:8064498048448315317",
+          "name": "questionCount",
+          "type": 6
+        },
+        {
+          "id": "7:5808929008602838097",
+          "name": "createdAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "8:1482522122888257152",
+      "lastPropertyId": "10:7781981202367255723",
+      "name": "QuizQuestionModel",
+      "properties": [
+        {
+          "id": "1:778325170771372026",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8184095909635359991",
+          "name": "quizId",
+          "type": 6
+        },
+        {
+          "id": "3:5907645397759051058",
+          "name": "question",
+          "type": 9
+        },
+        {
+          "id": "4:4266084967757572510",
+          "name": "typeStr",
+          "type": 9
+        },
+        {
+          "id": "5:1413746279355004286",
+          "name": "optionsJson",
+          "type": 9
+        },
+        {
+          "id": "6:8961549752986946674",
+          "name": "correctAnswer",
+          "type": 9
+        },
+        {
+          "id": "7:4885319488533208031",
+          "name": "explanation",
+          "type": 9
+        },
+        {
+          "id": "8:5790499054851937342",
+          "name": "questionIndex",
+          "type": 6
+        },
+        {
+          "id": "9:2060906784426041782",
+          "name": "options",
+          "type": 30
+        },
+        {
+          "id": "10:7781981202367255723",
+          "name": "topic",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "9:1906718705784843136",
+      "lastPropertyId": "5:2931307739449691286",
+      "name": "FlashcardDeckModel",
+      "properties": [
+        {
+          "id": "1:2737294394150503228",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8527718805122512438",
+          "name": "notebookId",
+          "type": 6
+        },
+        {
+          "id": "3:1901385270206931046",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "4:2265792436383260131",
+          "name": "createdAt",
+          "type": 12
+        },
+        {
+          "id": "5:2931307739449691286",
+          "name": "updatedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "10:8021950451290291198",
+      "lastPropertyId": "10:499091264113230882",
+      "name": "FlashcardModel",
+      "properties": [
+        {
+          "id": "1:5110773408333550866",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2749739035210644801",
+          "name": "deckId",
+          "type": 6
+        },
+        {
+          "id": "3:9127609029203608839",
+          "name": "front",
+          "type": 9
+        },
+        {
+          "id": "4:2699959230240147113",
+          "name": "back",
+          "type": 9
+        },
+        {
+          "id": "5:1544395815050676169",
+          "name": "cardIndex",
+          "type": 6
+        },
+        {
+          "id": "6:6088320542144454268",
+          "name": "easeFactor",
+          "type": 8
+        },
+        {
+          "id": "7:3079107636840857426",
+          "name": "interval",
+          "type": 6
+        },
+        {
+          "id": "8:7938750268313951294",
+          "name": "repetitions",
+          "type": 6
+        },
+        {
+          "id": "9:6697827443456448538",
+          "name": "nextReviewAt",
+          "type": 12
+        },
+        {
+          "id": "10:499091264113230882",
+          "name": "createdAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "11:4042082394175325421",
+      "lastPropertyId": "4:9207873289050991607",
+      "name": "FlashcardReviewModel",
+      "properties": [
+        {
+          "id": "1:7884822772138633424",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8759165236374270513",
+          "name": "flashcardId",
+          "type": 6
+        },
+        {
+          "id": "3:3654747303238874965",
+          "name": "quality",
+          "type": 6
+        },
+        {
+          "id": "4:9207873289050991607",
+          "name": "reviewedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "12:4764562703473078731",
+      "lastPropertyId": "4:5510359818244762691",
+      "name": "StudyPlanModel",
+      "properties": [
+        {
+          "id": "1:410819503669801249",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2722188561551204306",
+          "name": "date",
+          "type": 12
+        },
+        {
+          "id": "3:8275736587803804405",
+          "name": "tasksJson",
+          "type": 9
+        },
+        {
+          "id": "4:5510359818244762691",
+          "name": "generatedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "13:5716520234659994830",
+      "lastPropertyId": "6:4356166879606915250",
+      "name": "StudySessionModel",
+      "properties": [
+        {
+          "id": "1:4830934544339385600",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8364070969710480068",
+          "name": "notebookId",
+          "type": 6
+        },
+        {
+          "id": "3:2737360093686045992",
+          "name": "activityType",
+          "type": 9
+        },
+        {
+          "id": "4:927608042510842869",
+          "name": "durationSeconds",
+          "type": 6
+        },
+        {
+          "id": "5:1831867686028808862",
+          "name": "startedAt",
+          "type": 12
+        },
+        {
+          "id": "6:4356166879606915250",
+          "name": "endedAt",
+          "type": 12
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "14:3468003717060621635",
+      "lastPropertyId": "6:7922856430410494492",
+      "name": "HighlightModel",
+      "properties": [
+        {
+          "id": "1:2420376006543883270",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2718575265295425823",
+          "name": "noteId",
+          "type": 6
+        },
+        {
+          "id": "3:2893578593073899308",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "4:75323981526552292",
+          "name": "colorValue",
+          "type": 6
+        },
+        {
+          "id": "5:2710336522799967249",
+          "name": "note",
+          "type": 9
+        },
+        {
+          "id": "6:7922856430410494492",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "14:3468003717060621635",
+  "lastIndexId": "2:7564743392253910987",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

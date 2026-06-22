@@ -1,0 +1,1182 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../config/theme/app_colors.dart';
+import '../../../config/theme/gradients.dart';
+import '../../../config/theme/shadows.dart';
+import '../../../config/theme/spacing.dart';
+import '../../../config/theme/animations.dart';
+import '../../../core/llm/llm_service.dart';
+import '../../../core/openai/openai_client.dart';
+import '../../../data/models/highlight_model.dart';
+import '../../providers/highlight_provider.dart';
+import '../../providers/note_provider.dart';
+import '../../widgets/common/empty_state_widget.dart';
+import '../../widgets/common/error_state_widget.dart';
+import '../../widgets/common/markdown_view.dart';
+import '../../widgets/common/sc_button.dart';
+import '../../widgets/note/processing_indicator.dart';
+
+/// Palette for highlight color tags (ARGB ints, stored directly on the model).
+const _highlightColors = <int>[
+  0xFFFFD54F, // amber
+  0xFF81C784, // green
+  0xFF64B5F6, // blue
+  0xFFF06292, // pink
+  0xFFBA68C8, // purple
+  0xFFFF8A65, // orange
+];
+
+final _noteProvider = FutureProvider.family((ref, int noteId) async {
+  final repo = ref.read(noteRepositoryProvider);
+  return repo.getById(noteId);
+});
+
+final _summaryProvider = FutureProvider.family((ref, int noteId) async {
+  final repo = ref.read(noteRepositoryProvider);
+  return repo.generateSummary(noteId);
+});
+
+class NoteDetailScreen extends ConsumerStatefulWidget {
+  final int noteId;
+
+  const NoteDetailScreen({super.key, required this.noteId});
+
+  @override
+  ConsumerState<NoteDetailScreen> createState() => _NoteDetailScreenState();
+}
+
+class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  late final TextEditingController _editController;
+  bool _showSummary = false;
+  bool _isEditing = false;
+  int _activeTab = 0;
+  String _selectedText = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _editController = TextEditingController();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _activeTab = _tabController.index);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _editController.dispose();
+    super.dispose();
+  }
+
+  /// Custom text-selection toolbar: our "Ask AI" action plus the platform
+  /// defaults (Copy, Select all, …).
+  Widget _selectionToolbar(
+      BuildContext context, SelectableRegionState selState) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: selState.contextMenuAnchors,
+      buttonItems: [
+        ContextMenuButtonItem(
+          label: 'Ask AI',
+          onPressed: () {
+            final text = _selectedText.trim();
+            selState.hideToolbar();
+            if (text.isNotEmpty) _askAiAboutSelection(text);
+          },
+        ),
+        ContextMenuButtonItem(
+          label: 'Highlight',
+          onPressed: () {
+            final text = _selectedText.trim();
+            selState.hideToolbar();
+            if (text.isNotEmpty) _saveHighlightFlow(text);
+          },
+        ),
+        ...selState.contextMenuButtonItems,
+      ],
+    );
+  }
+
+  void _askAiAboutSelection(String selection) {
+    if (!OpenAiClient.instance.hasKey) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('No OpenAI API key set. Add your key in Settings > AI.'),
+        ),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AskAiSheet(selection: selection),
+    );
+  }
+
+  Future<void> _saveHighlightFlow(String text) async {
+    final result = await showModalBottomSheet<({int color, String? note})>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _HighlightEditorSheet(quote: text),
+    );
+    if (result == null) return;
+
+    ref.read(highlightDatasourceProvider).save(HighlightModel(
+          noteId: widget.noteId,
+          text: text,
+          colorValue: result.color,
+          note: (result.note != null && result.note!.trim().isNotEmpty)
+              ? result.note!.trim()
+              : null,
+          createdAt: DateTime.now(),
+        ));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(highlightsProvider(widget.noteId));
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved to Highlights')),
+      );
+    }
+  }
+
+  Widget _buildHighlightsTab(ThemeData theme, bool isDark, int noteId) {
+    final async = ref.watch(highlightsProvider(noteId));
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => ErrorStateWidget(message: e.toString()),
+      data: (highlights) {
+        if (highlights.isEmpty) {
+          return const EmptyStateWidget(
+            icon: Icons.highlight_alt_rounded,
+            title: 'No highlights yet',
+            subtitle:
+                'Select text in the Content tab, then tap "Highlight" to save it here with a color and an optional note.',
+          );
+        }
+        return ListView.separated(
+          padding: EdgeInsets.fromLTRB(
+            Spacing.screenPaddingH,
+            Spacing.md,
+            Spacing.screenPaddingH,
+            Spacing.lg + MediaQuery.of(context).padding.bottom,
+          ),
+          itemCount: highlights.length,
+          separatorBuilder: (_, _) => const SizedBox(height: Spacing.sm),
+          itemBuilder: (context, index) {
+            final h = highlights[index];
+            return _HighlightCard(
+              highlight: h,
+              isDark: isDark,
+              onAskAi: () => _askAiAboutSelection(
+                (h.note != null && h.note!.isNotEmpty)
+                    ? '${h.text}\n\n(My note: ${h.note})'
+                    : h.text,
+              ),
+              onDelete: () {
+                ref.read(highlightDatasourceProvider).delete(h.id);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) ref.invalidate(highlightsProvider(noteId));
+                });
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final noteAsync = ref.watch(_noteProvider(widget.noteId));
+
+    return Scaffold(
+      backgroundColor:
+          isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      body: noteAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ErrorStateWidget(message: e.toString()),
+        data: (note) {
+          if (note == null) {
+            return const Center(child: Text('Note not found'));
+          }
+
+          return NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                // ── Sticky header ─────────────────────────────────────
+                SliverAppBar(
+                  pinned: true,
+                  backgroundColor: isDark
+                      ? AppColors.surfaceDark
+                      : AppColors.surfaceLight,
+                  title: Text(
+                    note.title,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  actions: [
+                    if (_activeTab == 0)
+                      IconButton(
+                        icon: Icon(_isEditing ? Icons.check_rounded : Icons.edit_rounded),
+                        onPressed: () async {
+                          if (_isEditing) {
+                            // Save changes
+                            final currentNote = ref.read(_noteProvider(widget.noteId)).value;
+                            if (currentNote != null) {
+                              final updatedNote = currentNote.copyWith(
+                                rawText: _editController.text,
+                                updatedAt: DateTime.now(),
+                              );
+                              await ref.read(noteRepositoryProvider).update(updatedNote);
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) {
+                                  ref.invalidate(_noteProvider(widget.noteId));
+                                }
+                              });
+                            }
+                            setState(() => _isEditing = false);
+                          } else {
+                            // Enter edit mode
+                            final currentNote = ref.read(_noteProvider(widget.noteId)).value;
+                            if (currentNote != null) {
+                              _editController.text = currentNote.rawText;
+                            }
+                            setState(() => _isEditing = true);
+                          }
+                        },
+                      ),
+                  ],
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(52),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Spacing.screenPaddingH,
+                        vertical: Spacing.sm,
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _TabChip(
+                              icon: Icons.description_rounded,
+                              label: 'Content',
+                              isActive: _activeTab == 0,
+                              isDark: isDark,
+                              onTap: () => _tabController.animateTo(0),
+                            ),
+                            const SizedBox(width: Spacing.sm),
+                            _TabChip(
+                              icon: Icons.auto_awesome_rounded,
+                              label: 'Summary',
+                              isActive: _activeTab == 1,
+                              isDark: isDark,
+                              onTap: () => _tabController.animateTo(1),
+                            ),
+                            const SizedBox(width: Spacing.sm),
+                            _TabChip(
+                              icon: Icons.highlight_rounded,
+                              label: 'Highlights',
+                              isActive: _activeTab == 2,
+                              isDark: isDark,
+                              onTap: () => _tabController.animateTo(2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ];
+            },
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                // ── Content tab ─────────────────────────────────────
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(Spacing.screenPaddingH),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Status + chunk count row
+                      Row(
+                        children: [
+                          ProcessingIndicator(status: note.status),
+                          const Spacer(),
+                          Text(
+                            '${note.chunkCount} chunks',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: isDark
+                                  ? AppColors.onSurfaceVariantDark
+                                  : AppColors.onSurfaceVariantLight,
+                              fontFamily: 'JetBrains Mono',
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: Spacing.md),
+
+                      // Note content. Markdown notes render as a formatted
+                      // preview in view mode; editing shows the raw source.
+                      _isEditing
+                          ? TextField(
+                              controller: _editController,
+                              maxLines: null,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.7,
+                                color: isDark
+                                    ? AppColors.onSurfaceDark
+                                    : AppColors.onSurfaceLight,
+                              ),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            )
+                          : SelectionArea(
+                              onSelectionChanged: (content) {
+                                _selectedText = content?.plainText ?? '';
+                              },
+                              contextMenuBuilder: _selectionToolbar,
+                              child: note.sourceType == 'md'
+                                  ? MarkdownView(
+                                      data: note.rawText,
+                                      selectable: false,
+                                    )
+                                  : Text(
+                                      note.rawText,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        height: 1.7,
+                                        color: isDark
+                                            ? AppColors.onSurfaceDark
+                                            : AppColors.onSurfaceLight,
+                                      ),
+                                    ),
+                            ),
+                    ],
+                  ),
+                ),
+
+                // ── Summary tab ─────────────────────────────────────
+                _buildSummaryTab(theme, isDark),
+
+                // ── Highlights tab ──────────────────────────────────
+                _buildHighlightsTab(theme, isDark, note.id),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSummaryTab(ThemeData theme, bool isDark) {
+    final noteAsync = ref.watch(_noteProvider(widget.noteId));
+    final note = noteAsync.value;
+
+    if (note == null) return const SizedBox.shrink();
+
+    // State 3: Summary already exists
+    if (note.summary != null && note.summary!.isNotEmpty) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(Spacing.screenPaddingH),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // AI Generated badge
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.sm,
+                vertical: Spacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.surfaceContainerDark
+                    : AppColors.surfaceContainerLight,
+                borderRadius: Spacing.borderRadiusPill,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome,
+                      size: 12, color: AppColors.primary),
+                  const SizedBox(width: 4),
+                  Text(
+                    'AI Generated',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: Spacing.md),
+
+            MarkdownView(data: note.summary!),
+          ],
+        ),
+      );
+    }
+
+    // State 1: Generate prompt
+    if (!_showSummary) {
+      return Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.all(Spacing.xl),
+          decoration: BoxDecoration(
+            color: isDark
+                ? AppColors.surfaceVariantDark
+                : AppColors.surfaceVariantLight,
+            borderRadius: Spacing.borderRadiusLg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Gradient-masked sparkle icon
+              ShaderMask(
+                shaderCallback: (bounds) =>
+                    AppGradients.primary.createShader(bounds),
+                blendMode: BlendMode.srcIn,
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 48,
+                  color: Colors.white,
+                ),
+              ),
+
+              const SizedBox(height: Spacing.md),
+
+              Text(
+                'AI Summary',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isDark
+                      ? AppColors.onSurfaceDark
+                      : AppColors.onSurfaceLight,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: Spacing.sm),
+
+              Text(
+                'Generate a concise summary of your notes',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isDark
+                      ? AppColors.onSurfaceVariantDark
+                      : AppColors.onSurfaceVariantLight,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: Spacing.sectionGap),
+
+              ScButton(
+                label: 'Generate Summary',
+                icon: Icons.auto_awesome_rounded,
+                variant: ScButtonVariant.gradient,
+                expanded: false,
+                onPressed: () => setState(() => _showSummary = true),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // State 2: Generating
+    final summaryAsync = ref.watch(_summaryProvider(widget.noteId));
+    return summaryAsync.when(
+      loading: () => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(Spacing.screenPaddingH),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Shimmer skeleton bars
+              ..._shimmerBars(isDark, [1.0, 0.85, 0.92, 0.78, 0.6]),
+
+              const SizedBox(height: Spacing.md),
+
+              // Pulsing label
+              _PulsingText(
+                text: 'Analyzing your notes...',
+                isDark: isDark,
+              ),
+            ],
+          ),
+        ),
+      ),
+      error: (e, _) => ErrorStateWidget(message: e.toString()),
+      data: (summary) {
+        // State 3: Reveal with animation
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: AppAnimations.durationSlow,
+          curve: AppAnimations.easeOut,
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, 16 * (1 - value)),
+                child: child,
+              ),
+            );
+          },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(Spacing.screenPaddingH),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // AI Generated badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.sm,
+                    vertical: Spacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.surfaceContainerDark
+                        : AppColors.surfaceContainerLight,
+                    borderRadius: Spacing.borderRadiusPill,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.auto_awesome,
+                          size: 12, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AI Generated',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: Spacing.md),
+
+                MarkdownView(data: summary),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Widget> _shimmerBars(bool isDark, List<double> widthFactors) {
+    return widthFactors.map((factor) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.sm),
+        child: FractionallySizedBox(
+          widthFactor: factor,
+          alignment: Alignment.centerLeft,
+          child: _ShimmerBar(isDark: isDark),
+        ),
+      );
+    }).toList();
+  }
+}
+
+// ─── Tab chip ───────────────────────────────────────────────────────────────
+
+class _TabChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _TabChip({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppAnimations.durationMedium,
+        curve: AppAnimations.easeOut,
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primary
+              : (isDark
+                  ? AppColors.surfaceContainerDark
+                  : AppColors.surfaceContainerLight),
+          borderRadius: Spacing.borderRadiusPill,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive
+                  ? Colors.white
+                  : (isDark
+                      ? AppColors.onSurfaceVariantDark
+                      : AppColors.onSurfaceVariantLight),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: isActive
+                    ? Colors.white
+                    : (isDark
+                        ? AppColors.onSurfaceVariantDark
+                        : AppColors.onSurfaceVariantLight),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shimmer bar ────────────────────────────────────────────────────────────
+
+class _ShimmerBar extends StatefulWidget {
+  final bool isDark;
+  const _ShimmerBar({required this.isDark});
+
+  @override
+  State<_ShimmerBar> createState() => _ShimmerBarState();
+}
+
+class _ShimmerBarState extends State<_ShimmerBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        return Container(
+          height: 12,
+          decoration: BoxDecoration(
+            borderRadius: Spacing.borderRadiusSm,
+            gradient: LinearGradient(
+              begin: Alignment(-1.0 + 2.0 * _controller.value, 0),
+              end: Alignment(1.0 + 2.0 * _controller.value, 0),
+              colors: [
+                widget.isDark
+                    ? AppColors.surfaceContainerDark
+                    : AppColors.surfaceContainerLight,
+                widget.isDark
+                    ? AppColors.surfaceVariantDark
+                    : AppColors.surfaceVariantLight,
+                widget.isDark
+                    ? AppColors.surfaceContainerDark
+                    : AppColors.surfaceContainerLight,
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Pulsing text ───────────────────────────────────────────────────────────
+
+class _PulsingText extends StatefulWidget {
+  final String text;
+  final bool isDark;
+  const _PulsingText({required this.text, required this.isDark});
+
+  @override
+  State<_PulsingText> createState() => _PulsingTextState();
+}
+
+class _PulsingTextState extends State<_PulsingText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        return Opacity(
+          opacity: 0.6 + 0.4 * _controller.value,
+          child: Text(
+            widget.text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.primary,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Ask-AI-about-selection bottom sheet ─────────────────────────────────────
+
+class _AskAiSheet extends ConsumerStatefulWidget {
+  final String selection;
+  const _AskAiSheet({required this.selection});
+
+  @override
+  ConsumerState<_AskAiSheet> createState() => _AskAiSheetState();
+}
+
+class _AskAiSheetState extends ConsumerState<_AskAiSheet> {
+  final StringBuffer _buffer = StringBuffer();
+  bool _done = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    final prompt = '''<|begin_of_turn|>system
+You are a helpful study tutor. The student selected a passage from their own study notes and wants it explained. Clarify it concisely in simple language, define any key terms, and add a brief example or analogy if useful. Format your answer in Markdown.<|end_of_turn|>
+<|begin_of_turn|>user
+Explain this passage from my notes:
+
+"${widget.selection}"<|end_of_turn|>
+<|begin_of_turn|>assistant
+''';
+    try {
+      await for (final token
+          in ref.read(llmServiceProvider).generateStream(prompt, maxTokens: 900)) {
+        if (!mounted) return;
+        setState(() => _buffer.write(token));
+      }
+      if (mounted) setState(() => _done = true);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error =
+            e.toString().replaceFirst('LlmException: ', ''));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final answer = _buffer.toString();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Grab handle
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: Spacing.sm),
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant
+                        .withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Spacing.screenPaddingH,
+                  0,
+                  Spacing.screenPaddingH,
+                  Spacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    ShaderMask(
+                      shaderCallback: (b) =>
+                          AppGradients.primary.createShader(b),
+                      blendMode: BlendMode.srcIn,
+                      child: const Icon(Icons.auto_awesome_rounded,
+                          size: 20, color: Colors.white),
+                    ),
+                    const SizedBox(width: Spacing.sm),
+                    Text('Ask AI', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    if (!_done && _error == null)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
+                ),
+              ),
+              // Quoted selection
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.screenPaddingH),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(Spacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    borderRadius: Spacing.borderRadiusSm,
+                    border: Border(
+                      left: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.5),
+                          width: 3),
+                    ),
+                  ),
+                  child: Text(
+                    widget.selection,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: Spacing.sm),
+              const Divider(height: 1),
+              // Answer
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(Spacing.screenPaddingH),
+                  child: _error != null
+                      ? Text(_error!,
+                          style: TextStyle(color: AppColors.error))
+                      : answer.isEmpty
+                          ? Text('Thinking…',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ))
+                          : MarkdownView(data: answer, selectable: true),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Highlight card (Highlights tab) ─────────────────────────────────────────
+
+class _HighlightCard extends StatelessWidget {
+  final HighlightModel highlight;
+  final bool isDark;
+  final VoidCallback onAskAi;
+  final VoidCallback onDelete;
+
+  const _HighlightCard({
+    required this.highlight,
+    required this.isDark,
+    required this.onAskAi,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = Color(highlight.colorValue);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        borderRadius: Spacing.borderRadiusMd,
+        boxShadow: isDark ? AppShadows.level1Dark : AppShadows.level1,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 5,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(12),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(Spacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      highlight.text,
+                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (highlight.note != null && highlight.note!.isNotEmpty) ...[
+                      const SizedBox(height: Spacing.sm),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.sticky_note_2_outlined,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              highlight.note!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: Spacing.xs),
+                    Row(
+                      children: [
+                        TextButton.icon(
+                          onPressed: onAskAi,
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                          label: const Text('Ask AI'),
+                          style: TextButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(0, 32),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: onDelete,
+                          icon: Icon(Icons.delete_outline_rounded,
+                              size: 18,
+                              color: theme.colorScheme.onSurfaceVariant),
+                          tooltip: 'Delete',
+                          constraints:
+                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Highlight editor sheet (color + optional note) ──────────────────────────
+
+class _HighlightEditorSheet extends StatefulWidget {
+  final String quote;
+  const _HighlightEditorSheet({required this.quote});
+
+  @override
+  State<_HighlightEditorSheet> createState() => _HighlightEditorSheetState();
+}
+
+class _HighlightEditorSheetState extends State<_HighlightEditorSheet> {
+  final _noteController = TextEditingController();
+  int _colorIndex = 0;
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          Spacing.screenPaddingH,
+          Spacing.md,
+          Spacing.screenPaddingH,
+          Spacing.lg + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant
+                      .withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: Spacing.md),
+            Text('New Highlight', style: theme.textTheme.titleMedium),
+            const SizedBox(height: Spacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(Spacing.sm),
+              decoration: BoxDecoration(
+                color: Color(_highlightColors[_colorIndex])
+                    .withValues(alpha: 0.22),
+                borderRadius: Spacing.borderRadiusSm,
+              ),
+              child: Text(
+                widget.quote,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isDark
+                      ? AppColors.onSurfaceDark
+                      : AppColors.onSurfaceLight,
+                ),
+              ),
+            ),
+            const SizedBox(height: Spacing.md),
+            Text('Color',
+                style: theme.textTheme.labelMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            const SizedBox(height: Spacing.sm),
+            Row(
+              children: List.generate(_highlightColors.length, (i) {
+                final selected = i == _colorIndex;
+                return Padding(
+                  padding: const EdgeInsets.only(right: Spacing.sm),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _colorIndex = i),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Color(_highlightColors[i]),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected
+                              ? (isDark ? Colors.white : Colors.black87)
+                              : Colors.transparent,
+                          width: 2,
+                        ),
+                      ),
+                      child: selected
+                          ? const Icon(Icons.check,
+                              size: 16, color: Colors.black54)
+                          : null,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: Spacing.md),
+            TextField(
+              controller: _noteController,
+              maxLines: 3,
+              minLines: 1,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+                hintText: 'Add a thought about this passage…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: Spacing.md),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop((
+                  color: _highlightColors[_colorIndex],
+                  note: _noteController.text,
+                )),
+                child: const Text('Save highlight'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

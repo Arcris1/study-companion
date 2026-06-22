@@ -1,0 +1,63 @@
+name: study_companion
+description: "AI-powered study companion (OpenAI-backed)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: any
+  riverpod_annotation: any
+
+  # Routing
+  go_router: any
+
+  # Database
+  objectbox: any
+  objectbox_flutter_libs: any
+
+  # Storage
+  shared_preferences: any
+  path_provider: any
+  flutter_secure_storage: any
+
+  # UI
+  google_fonts: any
+  shimmer: any
+  fl_chart: any
+  flutter_markdown_plus: any
+
+  # Animation & Polish
+  flutter_animate: any
+  flutter_staggered_animations: any
+  smooth_page_indicator: any
+
+  # Speech to text
+  speech_to_text: any
+
+  # File picking
+  file_picker: any
+
+  # Utils
+  uuid: any
+  intl: any
+  crypto: any
+  http: any
+  path: any
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: any
+  objectbox_generator: any
+
+flutter:
+  uses-material-design: true
