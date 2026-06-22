@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../config/app_config.dart';
+import '../ai/ai_config.dart';
 import '../errors/exceptions.dart';
 
 /// Thin client for the OpenAI REST API (chat completions + embeddings).
@@ -47,7 +48,7 @@ class OpenAiClient {
       Uri.parse('${AppConfig.openAiBaseUrl}/chat/completions'),
       headers: _headers,
       body: jsonEncode({
-        'model': AppConfig.openAiChatModel,
+        'model': AiConfig.instance.chatModel,
         'messages': messages,
         'max_tokens': maxTokens,
         'temperature': temperature,
@@ -133,7 +134,7 @@ class OpenAiClient {
         Uri.parse('${AppConfig.openAiBaseUrl}/embeddings'),
         headers: _headers,
         body: jsonEncode({
-          'model': AppConfig.openAiEmbeddingModel,
+          'model': AiConfig.instance.embeddingModel,
           'input': batch,
           'dimensions': dimensions,
         }),

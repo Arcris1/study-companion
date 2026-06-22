@@ -9,6 +9,7 @@ import '../../../config/theme/shadows.dart';
 import '../../../config/theme/gradients.dart';
 import '../../../config/theme/animations.dart';
 import '../../providers/theme_provider.dart';
+import '../../../core/ai/ai_config.dart';
 import '../../../core/openai/openai_client.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -137,40 +138,84 @@ class SettingsScreen extends ConsumerWidget {
               borderRadius: Spacing.borderRadiusMd,
               boxShadow: isDark ? AppShadows.level1Dark : AppShadows.level1,
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: Spacing.md,
-                vertical: Spacing.xs,
-              ),
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: AppGradients.primary,
-                  borderRadius: Spacing.borderRadiusSm,
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.xs,
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: AppGradients.primary,
+                      borderRadius: Spacing.borderRadiusSm,
+                    ),
+                    child: const Icon(
+                      Icons.key_rounded,
+                      size: 20,
+                      color: Colors.white,
+                    ),
+                  ),
+                  title:
+                      Text('OpenAI API Key', style: theme.textTheme.titleSmall),
+                  subtitle: Text(
+                    hasApiKey
+                        ? 'Configured · ${AiConfig.instance.chatModel}'
+                        : 'Not set — tap to add',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: hasApiKey
+                          ? theme.colorScheme.onSurfaceVariant
+                          : AppColors.error,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  onTap: () => context.push(AppRoutes.apiKeySetup),
                 ),
-                child: const Icon(
-                  Icons.key_rounded,
-                  size: 20,
-                  color: Colors.white,
+                Divider(
+                  height: 1,
+                  indent: Spacing.md,
+                  endIndent: Spacing.md,
+                  color: isDark
+                      ? AppColors.outlineVariantDark
+                      : AppColors.outlineVariantLight,
                 ),
-              ),
-              title: Text('OpenAI API Key', style: theme.textTheme.titleSmall),
-              subtitle: Text(
-                hasApiKey
-                    ? 'Configured · ${AppConfig.openAiChatModel}'
-                    : 'Not set — tap to add',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: hasApiKey
-                      ? theme.colorScheme.onSurfaceVariant
-                      : AppColors.error,
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: Spacing.md,
+                    vertical: Spacing.xs,
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                      borderRadius: Spacing.borderRadiusSm,
+                    ),
+                    child: Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  title: Text('AI Settings', style: theme.textTheme.titleSmall),
+                  subtitle: Text(
+                    'Models, prompts & token limits',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  onTap: () => context.push(AppRoutes.aiPrompts),
                 ),
-              ),
-              trailing: Icon(
-                Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              onTap: () => context.push(AppRoutes.apiKeySetup),
+              ],
             ),
           ),
 

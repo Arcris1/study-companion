@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../core/ai/ai_config.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
 import '../../domain/entities/quiz.dart';
@@ -64,7 +65,10 @@ class QuizRepository implements IQuizRepository {
       difficulty: difficulty.name,
     );
 
-    final response = await _llmService.generate(prompt, maxTokens: 3000);
+    final response = await _llmService.generate(
+      prompt,
+      maxTokens: AiConfig.instance.tokenLimit(AiOp.quiz),
+    );
 
     // Parse JSON response — try multiple strategies
     List<QuizQuestionModel> questionModels;

@@ -129,6 +129,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.selection = TextSelection.fromPosition(
       TextPosition(offset: text.length),
     );
+    // Rebuild so the Send button re-evaluates `hasText` and activates.
+    setState(() {});
   }
 
   @override

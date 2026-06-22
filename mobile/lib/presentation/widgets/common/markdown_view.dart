@@ -80,6 +80,11 @@ class MarkdownView extends StatelessWidget {
         tableBorder: TableBorder.all(color: outline, width: 1),
         tableCellsPadding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        // Size columns to their content (natural width) so wide tables
+        // overflow — flutter_markdown_plus then wraps them in a horizontal
+        // scroll view + scrollbar instead of cramming columns to fit.
+        tableColumnWidth: const IntrinsicColumnWidth(),
+        tableScrollbarThumbVisibility: true,
         horizontalRuleDecoration: BoxDecoration(
           border: Border(top: BorderSide(color: outline, width: 1)),
         ),

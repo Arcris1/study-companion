@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import '../../core/ai/ai_config.dart';
 import '../../core/errors/exceptions.dart';
 import '../../core/embedding/embedding_service.dart';
 import '../../core/llm/llm_service.dart';
@@ -178,7 +179,10 @@ class NoteRepository implements INoteRepository {
     final textForSummary = chunks.take(10).map((c) => c.text).join('\n\n');
 
     final prompt = PromptTemplates.summarize(textForSummary);
-    final summary = await _llmService.generate(prompt, maxTokens: 1024);
+    final summary = await _llmService.generate(
+      prompt,
+      maxTokens: AiConfig.instance.tokenLimit(AiOp.summary),
+    );
 
     // Cache the summary
     note.summary = summary;

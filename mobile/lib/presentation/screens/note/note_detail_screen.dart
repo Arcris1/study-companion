@@ -5,6 +5,7 @@ import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
 import '../../../config/theme/animations.dart';
+import '../../../core/ai/ai_config.dart';
 import '../../../core/llm/llm_service.dart';
 import '../../../core/openai/openai_client.dart';
 import '../../../data/models/highlight_model.dart';
@@ -490,7 +491,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 label: 'Generate Summary',
                 icon: Icons.auto_awesome_rounded,
                 variant: ScButtonVariant.gradient,
-                expanded: false,
+                expanded: true,
                 onPressed: () => setState(() => _showSummary = true),
               ),
             ],
@@ -796,7 +797,7 @@ class _AskAiSheetState extends ConsumerState<_AskAiSheet> {
 
   Future<void> _run() async {
     final prompt = '''<|begin_of_turn|>system
-You are a helpful study tutor. The student selected a passage from their own study notes and wants it explained. Clarify it concisely in simple language, define any key terms, and add a brief example or analogy if useful. Format your answer in Markdown.<|end_of_turn|>
+${AiConfig.instance.systemPrompt(AiOp.askAi)}<|end_of_turn|>
 <|begin_of_turn|>user
 Explain this passage from my notes:
 
@@ -804,8 +805,10 @@ Explain this passage from my notes:
 <|begin_of_turn|>assistant
 ''';
     try {
-      await for (final token
-          in ref.read(llmServiceProvider).generateStream(prompt, maxTokens: 900)) {
+      await for (final token in ref.read(llmServiceProvider).generateStream(
+            prompt,
+            maxTokens: AiConfig.instance.tokenLimit(AiOp.askAi),
+          )) {
         if (!mounted) return;
         setState(() => _buffer.write(token));
       }

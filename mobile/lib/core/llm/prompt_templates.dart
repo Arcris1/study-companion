@@ -1,7 +1,9 @@
+import '../ai/ai_config.dart';
+
 class PromptTemplates {
   static String summarize(String text) {
     return '''<|begin_of_turn|>system
-You are a helpful study assistant. Summarize the following study material concisely, highlighting key concepts, definitions, and important points. Use bullet points for clarity.<|end_of_turn|>
+${AiConfig.instance.systemPrompt(AiOp.summary)}<|end_of_turn|>
 <|begin_of_turn|>user
 Summarize the following text:
 
@@ -12,7 +14,7 @@ $text<|end_of_turn|>
 
   static String answerQuestion(String context, String question) {
     return '''<|begin_of_turn|>system
-You are a helpful study assistant. Answer the student's question using ONLY the provided context. If the context doesn't contain enough information, say so. Be concise and accurate.<|end_of_turn|>
+${AiConfig.instance.systemPrompt(AiOp.chat)}<|end_of_turn|>
 <|begin_of_turn|>user
 Context:
 $context
@@ -28,7 +30,7 @@ Question: $question<|end_of_turn|>
     required String question,
   }) {
     return '''<|begin_of_turn|>system
-You are a helpful study assistant. Answer the student's question using the provided context from their notes. Consider the conversation history to understand follow-up questions. Be concise and accurate.<|end_of_turn|>
+${AiConfig.instance.systemPrompt(AiOp.chat)}<|end_of_turn|>
 <|begin_of_turn|>user
 Context from notes:
 $context
@@ -60,7 +62,8 @@ Options MUST be ["True", "False"]. Mix true and false answers.''';
     }
 
     return '''<|begin_of_turn|>system
-You are a quiz generator. Generate exactly $numQuestions questions at $difficulty difficulty.
+${AiConfig.instance.systemPrompt(AiOp.quiz)}
+Generate exactly $numQuestions questions at $difficulty difficulty.
 
 $typeInstruction
 
@@ -77,7 +80,8 @@ $content<|end_of_turn|>
 
   static String generateFlashcards({required String content, required int count}) {
     return '''<|begin_of_turn|>system
-You are a flashcard generator. Create exactly $count flashcards from the provided study material. Each flashcard should have a clear question/concept on the front and a concise answer on the back.
+${AiConfig.instance.systemPrompt(AiOp.flashcards)}
+Create exactly $count flashcards from the provided study material.
 
 Return ONLY valid JSON in this exact format:
 {

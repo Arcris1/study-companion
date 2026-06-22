@@ -1,3 +1,4 @@
+import '../../core/ai/ai_config.dart';
 import '../../core/embedding/embedding_service.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
@@ -120,7 +121,10 @@ class ChatRepository implements IChatRepository {
 
     // Stream response
     final buffer = StringBuffer();
-    await for (final token in _llmService.generateStream(prompt)) {
+    await for (final token in _llmService.generateStream(
+      prompt,
+      maxTokens: AiConfig.instance.tokenLimit(AiOp.chat),
+    )) {
       buffer.write(token);
       yield token;
     }

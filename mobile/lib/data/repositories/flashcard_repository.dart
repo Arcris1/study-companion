@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../core/ai/ai_config.dart';
 import '../../core/algorithms/sm2.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
@@ -69,7 +70,10 @@ class FlashcardRepository implements IFlashcardRepository {
       count: count,
     );
 
-    final response = await _llmService.generate(prompt, maxTokens: 3000);
+    final response = await _llmService.generate(
+      prompt,
+      maxTokens: AiConfig.instance.tokenLimit(AiOp.flashcards),
+    );
 
     // Parse JSON response — try multiple strategies
     List<FlashcardModel> cardModels;

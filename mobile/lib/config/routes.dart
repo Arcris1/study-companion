@@ -17,6 +17,7 @@ import '../presentation/screens/flashcard/flashcard_deck_list_screen.dart';
 import '../presentation/screens/flashcard/flashcard_study_screen.dart';
 import '../presentation/screens/flashcard/flashcard_stats_screen.dart';
 import '../presentation/screens/settings/settings_screen.dart';
+import '../presentation/screens/settings/ai_prompts_screen.dart';
 import '../presentation/screens/analytics/analytics_dashboard_screen.dart';
 import '../presentation/screens/weakness/weakness_screen.dart';
 import '../presentation/screens/quiz/focus_mode_screen.dart';
@@ -97,6 +98,7 @@ class AppRoutes {
   static const String focusQuiz = '/focus-quiz/:notebookId/:topic';
   static const String planner = '/planner';
   static const String settings = '/settings';
+  static const String aiPrompts = '/settings/ai-prompts';
 }
 
 GoRouter createRouter({bool showOnboarding = false}) {
@@ -305,6 +307,13 @@ GoRouter createRouter({bool showOnboarding = false}) {
           key: state.pageKey,
           child: const SettingsScreen(),
           duration: const Duration(milliseconds: 250),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.aiPrompts,
+        pageBuilder: (context, state) => _slideRightPage(
+          key: state.pageKey,
+          child: const AiPromptsScreen(),
         ),
       ),
     ],

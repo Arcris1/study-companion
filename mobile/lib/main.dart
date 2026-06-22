@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'core/ai/ai_config.dart';
 import 'core/database/objectbox.dart';
 import 'core/openai/api_key_store.dart';
 import 'core/openai/openai_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load editable AI prompts + token limits.
+  await AiConfig.instance.load();
 
   // Initialize ObjectBox
   final objectBox = await ObjectBox.create();
