@@ -12,6 +12,7 @@ abstract class IQuizRepository {
     required QuestionType questionType,
     required DifficultyLevel difficulty,
     required int questionCount,
+    List<int>? noteIds,
   });
   Future<List<QuizQuestion>> getQuestions(int quizId);
   Future<QuizAttempt> submitAttempt({

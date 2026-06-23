@@ -77,7 +77,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
   /// Custom text-selection toolbar: our "Ask AI" action plus the platform
   /// defaults (Copy, Select all, …).
   Widget _selectionToolbar(
-      BuildContext context, SelectableRegionState selState) {
+    BuildContext context,
+    SelectableRegionState selState,
+  ) {
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: selState.contextMenuAnchors,
       buttonItems: [
@@ -106,8 +108,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     if (!OpenAiClient.instance.hasKey) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('No OpenAI API key set. Add your key in Settings > AI.'),
+          content: Text(
+            'No OpenAI API key set. Add your key in Settings > AI.',
+          ),
         ),
       );
       return;
@@ -129,22 +132,26 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     );
     if (result == null) return;
 
-    ref.read(highlightDatasourceProvider).save(HighlightModel(
-          noteId: widget.noteId,
-          text: text,
-          colorValue: result.color,
-          note: (result.note != null && result.note!.trim().isNotEmpty)
-              ? result.note!.trim()
-              : null,
-          createdAt: DateTime.now(),
-        ));
+    ref
+        .read(highlightDatasourceProvider)
+        .save(
+          HighlightModel(
+            noteId: widget.noteId,
+            text: text,
+            colorValue: result.color,
+            note: (result.note != null && result.note!.trim().isNotEmpty)
+                ? result.note!.trim()
+                : null,
+            createdAt: DateTime.now(),
+          ),
+        );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.invalidate(highlightsProvider(widget.noteId));
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Saved to Highlights')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Saved to Highlights')));
     }
   }
 
@@ -201,8 +208,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     final noteAsync = ref.watch(_noteProvider(widget.noteId));
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       body: noteAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorStateWidget(message: e.toString()),
@@ -231,17 +239,23 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                   actions: [
                     if (_activeTab == 0)
                       IconButton(
-                        icon: Icon(_isEditing ? Icons.check_rounded : Icons.edit_rounded),
+                        icon: Icon(
+                          _isEditing ? Icons.check_rounded : Icons.edit_rounded,
+                        ),
                         onPressed: () async {
                           if (_isEditing) {
                             // Save changes
-                            final currentNote = ref.read(_noteProvider(widget.noteId)).value;
+                            final currentNote = ref
+                                .read(_noteProvider(widget.noteId))
+                                .value;
                             if (currentNote != null) {
                               final updatedNote = currentNote.copyWith(
                                 rawText: _editController.text,
                                 updatedAt: DateTime.now(),
                               );
-                              await ref.read(noteRepositoryProvider).update(updatedNote);
+                              await ref
+                                  .read(noteRepositoryProvider)
+                                  .update(updatedNote);
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 if (mounted) {
                                   ref.invalidate(_noteProvider(widget.noteId));
@@ -251,7 +265,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                             setState(() => _isEditing = false);
                           } else {
                             // Enter edit mode
-                            final currentNote = ref.read(_noteProvider(widget.noteId)).value;
+                            final currentNote = ref
+                                .read(_noteProvider(widget.noteId))
+                                .value;
                             if (currentNote != null) {
                               _editController.text = currentNote.rawText;
                             }
@@ -359,13 +375,13 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                                     )
                                   : Text(
                                       note.rawText,
-                                      style:
-                                          theme.textTheme.bodyMedium?.copyWith(
-                                        height: 1.7,
-                                        color: isDark
-                                            ? AppColors.onSurfaceDark
-                                            : AppColors.onSurfaceLight,
-                                      ),
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            height: 1.7,
+                                            color: isDark
+                                                ? AppColors.onSurfaceDark
+                                                : AppColors.onSurfaceLight,
+                                          ),
                                     ),
                             ),
                     ],
@@ -413,8 +429,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.auto_awesome,
-                      size: 12, color: AppColors.primary),
+                  Icon(Icons.auto_awesome, size: 12, color: AppColors.primary),
                   const SizedBox(width: 4),
                   Text(
                     'AI Generated',
@@ -515,10 +530,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
               const SizedBox(height: Spacing.md),
 
               // Pulsing label
-              _PulsingText(
-                text: 'Analyzing your notes...',
-                isDark: isDark,
-              ),
+              _PulsingText(text: 'Analyzing your notes...', isDark: isDark),
             ],
           ),
         ),
@@ -559,8 +571,11 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.auto_awesome,
-                          size: 12, color: AppColors.primary),
+                      Icon(
+                        Icons.auto_awesome,
+                        size: 12,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'AI Generated',
@@ -627,8 +642,8 @@ class _TabChip extends StatelessWidget {
           color: isActive
               ? AppColors.primary
               : (isDark
-                  ? AppColors.surfaceContainerDark
-                  : AppColors.surfaceContainerLight),
+                    ? AppColors.surfaceContainerDark
+                    : AppColors.surfaceContainerLight),
           borderRadius: Spacing.borderRadiusPill,
         ),
         child: Row(
@@ -640,8 +655,8 @@ class _TabChip extends StatelessWidget {
               color: isActive
                   ? Colors.white
                   : (isDark
-                      ? AppColors.onSurfaceVariantDark
-                      : AppColors.onSurfaceVariantLight),
+                        ? AppColors.onSurfaceVariantDark
+                        : AppColors.onSurfaceVariantLight),
             ),
             const SizedBox(width: 6),
             Text(
@@ -652,8 +667,8 @@ class _TabChip extends StatelessWidget {
                 color: isActive
                     ? Colors.white
                     : (isDark
-                        ? AppColors.onSurfaceVariantDark
-                        : AppColors.onSurfaceVariantLight),
+                          ? AppColors.onSurfaceVariantDark
+                          : AppColors.onSurfaceVariantLight),
               ),
             ),
           ],
@@ -796,7 +811,8 @@ class _AskAiSheetState extends ConsumerState<_AskAiSheet> {
   }
 
   Future<void> _run() async {
-    final prompt = '''<|begin_of_turn|>system
+    final prompt =
+        '''<|begin_of_turn|>system
 ${AiConfig.instance.systemPrompt(AiOp.askAi)}<|end_of_turn|>
 <|begin_of_turn|>user
 Explain this passage from my notes:
@@ -805,18 +821,22 @@ Explain this passage from my notes:
 <|begin_of_turn|>assistant
 ''';
     try {
-      await for (final token in ref.read(llmServiceProvider).generateStream(
-            prompt,
-            maxTokens: AiConfig.instance.tokenLimit(AiOp.askAi),
-          )) {
+      await for (final token
+          in ref
+              .read(llmServiceProvider)
+              .generateStream(
+                prompt,
+                maxTokens: AiConfig.instance.tokenLimit(AiOp.askAi),
+              )) {
         if (!mounted) return;
         setState(() => _buffer.write(token));
       }
       if (mounted) setState(() => _done = true);
     } catch (e) {
       if (mounted) {
-        setState(() => _error =
-            e.toString().replaceFirst('LlmException: ', ''));
+        setState(
+          () => _error = e.toString().replaceFirst('LlmException: ', ''),
+        );
       }
     }
   }
@@ -836,9 +856,7 @@ Explain this passage from my notes:
         return Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(20),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
@@ -849,8 +867,9 @@ Explain this passage from my notes:
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant
-                        .withValues(alpha: 0.3),
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.3,
+                    ),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -869,8 +888,11 @@ Explain this passage from my notes:
                       shaderCallback: (b) =>
                           AppGradients.primary.createShader(b),
                       blendMode: BlendMode.srcIn,
-                      child: const Icon(Icons.auto_awesome_rounded,
-                          size: 20, color: Colors.white),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 20,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(width: Spacing.sm),
                     Text('Ask AI', style: theme.textTheme.titleMedium),
@@ -887,7 +909,8 @@ Explain this passage from my notes:
               // Quoted selection
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: Spacing.screenPaddingH),
+                  horizontal: Spacing.screenPaddingH,
+                ),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(Spacing.sm),
@@ -896,8 +919,9 @@ Explain this passage from my notes:
                     borderRadius: Spacing.borderRadiusSm,
                     border: Border(
                       left: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.5),
-                          width: 3),
+                        color: AppColors.primary.withValues(alpha: 0.5),
+                        width: 3,
+                      ),
                     ),
                   ),
                   child: Text(
@@ -919,14 +943,15 @@ Explain this passage from my notes:
                   controller: scrollController,
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
                   child: _error != null
-                      ? Text(_error!,
-                          style: TextStyle(color: AppColors.error))
+                      ? Text(_error!, style: TextStyle(color: AppColors.error))
                       : answer.isEmpty
-                          ? Text('Thinking…',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ))
-                          : MarkdownView(data: answer, selectable: true),
+                      ? Text(
+                          'Thinking…',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : MarkdownView(data: answer, selectable: true),
                 ),
               ),
             ],
@@ -988,14 +1013,17 @@ class _HighlightCard extends StatelessWidget {
                       maxLines: 5,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (highlight.note != null && highlight.note!.isNotEmpty) ...[
+                    if (highlight.note != null &&
+                        highlight.note!.isNotEmpty) ...[
                       const SizedBox(height: Spacing.sm),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.sticky_note_2_outlined,
-                              size: 14,
-                              color: theme.colorScheme.onSurfaceVariant),
+                          Icon(
+                            Icons.sticky_note_2_outlined,
+                            size: 14,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -1013,23 +1041,29 @@ class _HighlightCard extends StatelessWidget {
                       children: [
                         TextButton.icon(
                           onPressed: onAskAi,
-                          icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                          icon: const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 16,
+                          ),
                           label: const Text('Ask AI'),
                           style: TextButton.styleFrom(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                             minimumSize: const Size(0, 32),
                           ),
                         ),
                         const Spacer(),
                         IconButton(
                           onPressed: onDelete,
-                          icon: Icon(Icons.delete_outline_rounded,
-                              size: 18,
-                              color: theme.colorScheme.onSurfaceVariant),
+                          icon: Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                           tooltip: 'Delete',
-                          constraints:
-                              const BoxConstraints(minWidth: 36, minHeight: 36),
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
+                          ),
                         ),
                       ],
                     ),
@@ -1070,114 +1104,126 @@ class _HighlightEditorSheetState extends State<_HighlightEditorSheet> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: EdgeInsets.fromLTRB(
-          Spacing.screenPaddingH,
-          Spacing.md,
-          Spacing.screenPaddingH,
-          Spacing.lg + MediaQuery.of(context).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant
-                      .withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: Spacing.md),
-            Text('New Highlight', style: theme.textTheme.titleMedium),
-            const SizedBox(height: Spacing.sm),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(Spacing.sm),
-              decoration: BoxDecoration(
-                color: Color(_highlightColors[_colorIndex])
-                    .withValues(alpha: 0.22),
-                borderRadius: Spacing.borderRadiusSm,
-              ),
-              child: Text(
-                widget.quote,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: isDark
-                      ? AppColors.onSurfaceDark
-                      : AppColors.onSurfaceLight,
-                ),
-              ),
-            ),
-            const SizedBox(height: Spacing.md),
-            Text('Color',
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            const SizedBox(height: Spacing.sm),
-            Row(
-              children: List.generate(_highlightColors.length, (i) {
-                final selected = i == _colorIndex;
-                return Padding(
-                  padding: const EdgeInsets.only(right: Spacing.sm),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _colorIndex = i),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Color(_highlightColors[i]),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selected
-                              ? (isDark ? Colors.white : Colors.black87)
-                              : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                      child: selected
-                          ? const Icon(Icons.check,
-                              size: 16, color: Colors.black54)
-                          : null,
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            Spacing.screenPaddingH,
+            Spacing.md,
+            Spacing.screenPaddingH,
+            Spacing.lg + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.3,
                     ),
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: Spacing.md),
-            TextField(
-              controller: _noteController,
-              maxLines: 3,
-              minLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                hintText: 'Add a thought about this passage…',
-                border: OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: Spacing.md),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop((
-                  color: _highlightColors[_colorIndex],
-                  note: _noteController.text,
-                )),
-                child: const Text('Save highlight'),
+              const SizedBox(height: Spacing.md),
+              Text('New Highlight', style: theme.textTheme.titleMedium),
+              const SizedBox(height: Spacing.sm),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(Spacing.sm),
+                decoration: BoxDecoration(
+                  color: Color(
+                    _highlightColors[_colorIndex],
+                  ).withValues(alpha: 0.22),
+                  borderRadius: Spacing.borderRadiusSm,
+                ),
+                child: Text(
+                  widget.quote,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isDark
+                        ? AppColors.onSurfaceDark
+                        : AppColors.onSurfaceLight,
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: Spacing.md),
+              Text(
+                'Color',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Spacing.sm),
+              Row(
+                children: List.generate(_highlightColors.length, (i) {
+                  final selected = i == _colorIndex;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: Spacing.sm),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _colorIndex = i),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color(_highlightColors[i]),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected
+                                ? (isDark ? Colors.white : Colors.black87)
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(
+                                Icons.check,
+                                size: 16,
+                                color: Colors.black54,
+                              )
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: Spacing.md),
+              TextField(
+                controller: _noteController,
+                maxLines: 3,
+                minLines: 1,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Note (optional)',
+                  hintText: 'Add a thought about this passage…',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: Spacing.md),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop((
+                    color: _highlightColors[_colorIndex],
+                    note: _noteController.text,
+                  )),
+                  child: const Text('Save highlight'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

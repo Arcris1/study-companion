@@ -9,6 +9,7 @@ import '../../providers/flashcard_provider.dart';
 import '../../../core/openai/openai_client.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
+import '../../widgets/common/note_source_sheet.dart';
 
 class FlashcardDeckListScreen extends ConsumerStatefulWidget {
   final int notebookId;
@@ -25,12 +26,13 @@ class _FlashcardDeckListScreenState
   bool _isCreating = false;
 
   Future<void> _createDeck() async {
-    final title = await showDialog<String>(
+    final result = await showDialog<({String title, List<int> noteIds})>(
       context: context,
-      builder: (_) => const _NewDeckDialog(),
+      builder: (_) => _NewDeckDialog(notebookId: widget.notebookId),
     );
 
-    if (title == null || title.trim().isEmpty) return;
+    if (result == null || result.title.trim().isEmpty) return;
+    final title = result.title;
 
     // Cache ALL refs before any async work
     final repository = ref.read(flashcardRepositoryProvider);
@@ -54,7 +56,11 @@ class _FlashcardDeckListScreenState
         );
       }
 
-      await repository.generateFlashcards(deck.id, widget.notebookId);
+      await repository.generateFlashcards(
+        deck.id,
+        widget.notebookId,
+        noteIds: result.noteIds,
+      );
 
       // Refresh the list. Defer the invalidate to the next frame:
       // invalidating a family provider this screen is actively watching from
@@ -188,7 +194,8 @@ class _FlashcardDeckListScreenState
 // by the dialog's own State (after the route is fully removed), avoiding the
 // dispose-during-exit-animation race of a manually managed controller.
 class _NewDeckDialog extends StatefulWidget {
-  const _NewDeckDialog();
+  final int notebookId;
+  const _NewDeckDialog({required this.notebookId});
 
   @override
   State<_NewDeckDialog> createState() => _NewDeckDialogState();
@@ -196,6 +203,7 @@ class _NewDeckDialog extends StatefulWidget {
 
 class _NewDeckDialogState extends State<_NewDeckDialog> {
   final _controller = TextEditingController();
+  List<int> _noteIds = const [];
 
   @override
   void dispose() {
@@ -203,19 +211,59 @@ class _NewDeckDialogState extends State<_NewDeckDialog> {
     super.dispose();
   }
 
+  void _submit() {
+    Navigator.of(context).pop((title: _controller.text, noteIds: _noteIds));
+  }
+
+  Future<void> _pickSource() async {
+    final result = await showNoteSourceSheet(
+      context,
+      notebookId: widget.notebookId,
+      selected: _noteIds,
+    );
+    if (result != null) setState(() => _noteIds = result);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isAll = _noteIds.isEmpty;
+
     return AlertDialog(
       title: const Text('New Flashcard Deck'),
-      content: TextField(
-        controller: _controller,
-        decoration: const InputDecoration(
-          hintText: 'Enter deck title',
-          border: OutlineInputBorder(),
-        ),
-        autofocus: true,
-        textCapitalization: TextCapitalization.sentences,
-        onSubmitted: (value) => Navigator.of(context).pop(value),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              hintText: 'Enter deck title',
+              border: OutlineInputBorder(),
+            ),
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: Spacing.sm),
+          OutlinedButton.icon(
+            onPressed: _pickSource,
+            icon: Icon(
+              isAll ? Icons.auto_awesome_rounded : Icons.checklist_rounded,
+              size: 18,
+            ),
+            label: Text(
+              isAll
+                  ? 'Source: All notes'
+                  : 'Source: ${_noteIds.length} note${_noteIds.length == 1 ? '' : 's'}',
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+              alignment: Alignment.centerLeft,
+              foregroundColor: theme.colorScheme.onSurface,
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(
@@ -223,7 +271,7 @@ class _NewDeckDialogState extends State<_NewDeckDialog> {
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text),
+          onPressed: _submit,
           child: const Text('Create'),
         ),
       ],

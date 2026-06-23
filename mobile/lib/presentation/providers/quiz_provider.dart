@@ -58,6 +58,7 @@ class QuizzesNotifier extends Notifier<AsyncValue<List<Quiz>>> {
     required QuestionType questionType,
     required DifficultyLevel difficulty,
     required int questionCount,
+    List<int>? noteIds,
   }) async {
     final quiz = await _repository.generateQuiz(
       notebookId: notebookId,
@@ -65,6 +66,7 @@ class QuizzesNotifier extends Notifier<AsyncValue<List<Quiz>>> {
       questionType: questionType,
       difficulty: difficulty,
       questionCount: questionCount,
+      noteIds: noteIds,
     );
     await load();
     return quiz;

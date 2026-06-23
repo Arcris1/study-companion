@@ -6,6 +6,9 @@ class QuizConfig {
   final QuestionType questionType;
   final DifficultyLevel difficulty;
   final int questionCount;
+
+  /// Notes to draw questions from; empty = all notes ("General").
+  final List<int> selectedNoteIds;
   final bool isGenerating;
   final String? error;
 
@@ -13,6 +16,7 @@ class QuizConfig {
     this.questionType = QuestionType.mcq,
     this.difficulty = DifficultyLevel.medium,
     this.questionCount = 10,
+    this.selectedNoteIds = const [],
     this.isGenerating = false,
     this.error,
   });
@@ -21,6 +25,7 @@ class QuizConfig {
     QuestionType? questionType,
     DifficultyLevel? difficulty,
     int? questionCount,
+    List<int>? selectedNoteIds,
     bool? isGenerating,
     String? error,
   }) {
@@ -28,6 +33,7 @@ class QuizConfig {
       questionType: questionType ?? this.questionType,
       difficulty: difficulty ?? this.difficulty,
       questionCount: questionCount ?? this.questionCount,
+      selectedNoteIds: selectedNoteIds ?? this.selectedNoteIds,
       isGenerating: isGenerating ?? this.isGenerating,
       error: error,
     );
@@ -52,6 +58,10 @@ class QuizConfigNotifier extends Notifier<QuizConfig> {
 
   void setQuestionCount(int count) {
     state = state.copyWith(questionCount: count.clamp(5, 30));
+  }
+
+  void setNoteIds(List<int> ids) {
+    state = state.copyWith(selectedNoteIds: ids);
   }
 
   void setGenerating(bool value) {

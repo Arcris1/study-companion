@@ -14,6 +14,7 @@ import '../../providers/quiz_provider.dart';
 import '../../providers/quiz_generation_provider.dart';
 import '../../widgets/common/sc_button.dart';
 import '../../widgets/common/loading_overlay.dart';
+import '../../widgets/common/note_source_sheet.dart';
 
 class QuizConfigScreen extends ConsumerWidget {
   final int notebookId;
@@ -136,6 +137,26 @@ class QuizConfigScreen extends ConsumerWidget {
                     .setQuestionCount(v),
               ),
 
+              const SizedBox(height: Spacing.lg),
+
+              // ── Source (which notes) ──────────────────────────────
+              Text('Source', style: theme.textTheme.titleSmall),
+              const SizedBox(height: Spacing.space12),
+              _SourceSelector(
+                isDark: isDark,
+                selectedCount: config.selectedNoteIds.length,
+                onTap: () async {
+                  final result = await showNoteSourceSheet(
+                    context,
+                    notebookId: notebookId,
+                    selected: config.selectedNoteIds,
+                  );
+                  if (result != null) {
+                    ref.read(quizConfigProvider.notifier).setNoteIds(result);
+                  }
+                },
+              ),
+
               // Error text
               if (config.error != null) ...[
                 const SizedBox(height: Spacing.md),
@@ -196,6 +217,7 @@ class QuizConfigScreen extends ConsumerWidget {
         questionType: config.questionType,
         difficulty: config.difficulty,
         questionCount: config.questionCount,
+        noteIds: config.selectedNoteIds,
       );
       configNotifier.setGenerating(false);
       if (context.mounted) {
@@ -205,6 +227,82 @@ class QuizConfigScreen extends ConsumerWidget {
     } catch (e) {
       configNotifier.setError('Failed to generate quiz: $e');
     }
+  }
+}
+
+// ─── Source Selector ─────────────────────────────────────────────────────────
+
+class _SourceSelector extends StatelessWidget {
+  final bool isDark;
+  final int selectedCount;
+  final VoidCallback onTap;
+
+  const _SourceSelector({
+    required this.isDark,
+    required this.selectedCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isAll = selectedCount == 0;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: Spacing.md,
+        ),
+        decoration: BoxDecoration(
+          color: isDark
+              ? AppColors.surfaceContainerDark
+              : AppColors.surfaceContainerLight,
+          borderRadius: Spacing.borderRadiusMd,
+          border: Border.all(
+            color: isDark
+                ? AppColors.outlineVariantDark
+                : AppColors.outlineVariantLight,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isAll ? Icons.auto_awesome_rounded : Icons.checklist_rounded,
+              size: 20,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isAll ? 'General — all notes' : 'Selected notes',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    isAll
+                        ? 'Questions drawn from every note'
+                        : '$selectedCount note${selectedCount == 1 ? '' : 's'} chosen',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

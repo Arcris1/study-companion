@@ -35,9 +35,15 @@ class QuizRepository implements IQuizRepository {
     required QuestionType questionType,
     required DifficultyLevel difficulty,
     required int questionCount,
+    List<int>? noteIds,
   }) async {
-    // Gather note content from notebook
-    final notes = _noteDatasource.getByNotebookId(notebookId);
+    // Gather note content from the notebook — optionally limited to a chosen
+    // subset of notes (empty/null = all notes = "General").
+    var notes = _noteDatasource.getByNotebookId(notebookId);
+    if (noteIds != null && noteIds.isNotEmpty) {
+      final idSet = noteIds.toSet();
+      notes = notes.where((n) => idSet.contains(n.id)).toList();
+    }
     if (notes.isEmpty) throw Exception('No notes found in notebook');
 
     // Collect chunks from all notes

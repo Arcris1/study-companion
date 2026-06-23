@@ -26,12 +26,16 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
     final planAsync = ref.watch(todayPlanProvider);
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       appBar: AppBar(
-        title: Text('Daily Planner',
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w600)),
+        title: Text(
+          'Daily Planner',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -193,7 +197,8 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
                         strokeWidth: 6,
                         backgroundColor: Colors.white.withValues(alpha: 0.2),
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                            Colors.white),
+                          Colors.white,
+                        ),
                       ),
                     ),
                     Text(
@@ -302,9 +307,9 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
   }
 
   Future<void> _generatePlan() async {
-    ref.read(todayPlanProvider.notifier).generatePlan(
-          availableMinutes: _availableMinutes,
-        );
+    ref
+        .read(todayPlanProvider.notifier)
+        .generatePlan(availableMinutes: _availableMinutes);
   }
 
   Future<void> _addTask() async {
@@ -323,8 +328,7 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Regenerate Plan?'),
-        content:
-            const Text('This will replace your current plan for today.'),
+        content: const Text('This will replace your current plan for today.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -354,12 +358,27 @@ class _DateHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final dayNames = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday'
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
     ];
     final monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
 
     return Column(
@@ -418,8 +437,8 @@ class _TimeSelector extends StatelessWidget {
               color: isSelected
                   ? AppColors.primary
                   : (isDark
-                      ? AppColors.surfaceContainerDark
-                      : AppColors.surfaceContainerLight),
+                        ? AppColors.surfaceContainerDark
+                        : AppColors.surfaceContainerLight),
               borderRadius: Spacing.borderRadiusPill,
               boxShadow: isSelected
                   ? (isDark ? AppShadows.level1Dark : AppShadows.level1)
@@ -431,8 +450,8 @@ class _TimeSelector extends StatelessWidget {
                 color: isSelected
                     ? Colors.white
                     : (isDark
-                        ? AppColors.onSurfaceVariantDark
-                        : AppColors.onSurfaceVariantLight),
+                          ? AppColors.onSurfaceVariantDark
+                          : AppColors.onSurfaceVariantLight),
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
               ),
@@ -480,8 +499,8 @@ class _TaskCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: task.isCompleted
             ? (isDark
-                ? AppColors.surfaceContainerDark
-                : AppColors.surfaceContainerLight)
+                  ? AppColors.surfaceContainerDark
+                  : AppColors.surfaceContainerLight)
             : (isDark ? AppColors.surfaceDark : AppColors.surfaceLight),
         borderRadius: Spacing.borderRadiusMd,
         boxShadow: task.isCompleted
@@ -515,8 +534,11 @@ class _TaskCard extends StatelessWidget {
                   borderRadius: Spacing.borderRadiusSm,
                 ),
                 child: task.isCompleted
-                    ? const Icon(Icons.check_rounded,
-                        size: 18, color: Colors.white)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      )
                     : null,
               ),
             ),
@@ -527,7 +549,9 @@ class _TaskCard extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _typeColor.withValues(alpha: task.isCompleted ? 0.08 : 0.12),
+                color: _typeColor.withValues(
+                  alpha: task.isCompleted ? 0.08 : 0.12,
+                ),
                 borderRadius: Spacing.borderRadiusSm,
               ),
               child: Icon(
@@ -548,12 +572,13 @@ class _TaskCard extends StatelessWidget {
                   Text(
                     task.title,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      decoration:
-                          task.isCompleted ? TextDecoration.lineThrough : null,
+                      decoration: task.isCompleted
+                          ? TextDecoration.lineThrough
+                          : null,
                       color: task.isCompleted
                           ? (isDark
-                              ? AppColors.onSurfaceVariantDark
-                              : AppColors.onSurfaceVariantLight)
+                                ? AppColors.onSurfaceVariantDark
+                                : AppColors.onSurfaceVariantLight)
                           : null,
                     ),
                   ),
@@ -636,12 +661,14 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) return;
     final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 15;
-    Navigator.of(context).pop(StudyTask(
-      title: title,
-      description: _descCtrl.text.trim(),
-      type: _type,
-      estimatedMinutes: minutes.clamp(1, 600),
-    ));
+    Navigator.of(context).pop(
+      StudyTask(
+        title: title,
+        description: _descCtrl.text.trim(),
+        type: _type,
+        estimatedMinutes: minutes.clamp(1, 600),
+      ),
+    );
   }
 
   @override
@@ -650,106 +677,118 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: EdgeInsets.fromLTRB(
-          Spacing.screenPaddingH,
-          Spacing.md,
-          Spacing.screenPaddingH,
-          Spacing.lg + MediaQuery.of(context).padding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: Spacing.md),
-            Text('Add Task', style: theme.textTheme.titleMedium),
-            const SizedBox(height: Spacing.md),
-            TextField(
-              controller: _titleCtrl,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: Spacing.sm),
-            TextField(
-              controller: _descCtrl,
-              minLines: 1,
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: Spacing.md),
-            Text('Type',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                )),
-            const SizedBox(height: Spacing.sm),
-            Wrap(
-              spacing: Spacing.sm,
-              runSpacing: Spacing.sm,
-              children: _types.map((t) {
-                final selected = _type == t.$1;
-                return ChoiceChip(
-                  label: Text(t.$2),
-                  selected: selected,
-                  onSelected: (_) => setState(() => _type = t.$1),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: Spacing.md),
-            Row(
-              children: [
-                Text('Minutes',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    )),
-                const SizedBox(width: Spacing.md),
-                SizedBox(
-                  width: 96,
-                  child: TextField(
-                    controller: _minutesCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            Spacing.screenPaddingH,
+            Spacing.md,
+            Spacing.screenPaddingH,
+            Spacing.lg + MediaQuery.of(context).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.3,
                     ),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: Spacing.lg),
-            ScButton(
-              label: 'Add task',
-              icon: Icons.add_rounded,
-              variant: ScButtonVariant.gradient,
-              expanded: true,
-              onPressed: _save,
-            ),
-          ],
+              ),
+              const SizedBox(height: Spacing.md),
+              Text('Add Task', style: theme.textTheme.titleMedium),
+              const SizedBox(height: Spacing.md),
+              TextField(
+                controller: _titleCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: Spacing.sm),
+              TextField(
+                controller: _descCtrl,
+                minLines: 1,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: Spacing.md),
+              Text(
+                'Type',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: Spacing.sm),
+              Wrap(
+                spacing: Spacing.sm,
+                runSpacing: Spacing.sm,
+                children: _types.map((t) {
+                  final selected = _type == t.$1;
+                  return ChoiceChip(
+                    label: Text(t.$2),
+                    selected: selected,
+                    onSelected: (_) => setState(() => _type = t.$1),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: Spacing.md),
+              Row(
+                children: [
+                  Text(
+                    'Minutes',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: Spacing.md),
+                  SizedBox(
+                    width: 96,
+                    child: TextField(
+                      controller: _minutesCtrl,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.lg),
+              ScButton(
+                label: 'Add task',
+                icon: Icons.add_rounded,
+                variant: ScButtonVariant.gradient,
+                expanded: true,
+                onPressed: _save,
+              ),
+            ],
+          ),
         ),
       ),
     );
