@@ -6,6 +6,7 @@ import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
 import '../../../config/theme/animations.dart';
+import '../../../core/utils/session_tracker.dart';
 import '../../providers/notebook_provider.dart';
 import '../../providers/note_provider.dart';
 import '../../providers/quiz_provider.dart';
@@ -27,8 +28,9 @@ class NotebookDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TabController _tabController;
+  late final SessionTracker _tracker;
   int _activeTab = 0;
   bool _fabExpanded = false;
 
@@ -38,6 +40,21 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
     _tabController = TabController(length: 4, vsync: this);
     // FIX: listen to tab changes so FAB responds to active tab
     _tabController.addListener(_onTabChanged);
+
+    // Track study time for this notebook (powers the Analytics dashboard).
+    // Pauses when the app is backgrounded so idle time isn't counted.
+    _tracker = ref.read(sessionTrackerProvider);
+    WidgetsBinding.instance.addObserver(this);
+    _tracker.start(widget.notebookId, 'study');
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _tracker.start(widget.notebookId, 'study');
+    } else if (state == AppLifecycleState.paused) {
+      _tracker.stop();
+    }
   }
 
   void _onTabChanged() {
@@ -51,6 +68,8 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tracker.stop(); // save the session for this notebook visit
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
@@ -388,7 +407,7 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                           : AppShadows.level1,
                     ),
                     child: InkWell(
-                      onTap: () => context.push('/quiz/${quiz.id}'),
+                      onTap: () => context.push('/quiz/${quiz.id}/history'),
                       borderRadius: Spacing.borderRadiusMd,
                       child: Row(
                         children: [

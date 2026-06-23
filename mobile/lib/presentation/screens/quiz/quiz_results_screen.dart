@@ -181,7 +181,15 @@ class _QuizResultsScreenState extends ConsumerState<QuizResultsScreen> {
 
                     const SizedBox(height: Spacing.lg),
 
-                    // ── Done Button ──────────────────────────────────
+                    // ── Actions ──────────────────────────────────────
+                    ScButton(
+                      label: 'View all attempts',
+                      icon: Icons.history_rounded,
+                      variant: ScButtonVariant.gradient,
+                      onPressed: () =>
+                          context.push('/quiz/${widget.quizId}/history'),
+                    ),
+                    const SizedBox(height: Spacing.sm),
                     ScButton(
                       label: 'Done',
                       variant: ScButtonVariant.outlined,

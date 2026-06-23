@@ -24,6 +24,16 @@ class QuizHistoryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('Quiz History', style: theme.textTheme.titleLarge),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/quiz/$quizId'),
+        icon: const Icon(Icons.play_arrow_rounded),
+        label: Text(
+          attemptsAsync.maybeWhen(
+            data: (a) => a.isEmpty ? 'Take quiz' : 'Retake quiz',
+            orElse: () => 'Take quiz',
+          ),
+        ),
+      ),
       body: attemptsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorStateWidget(message: e.toString()),
