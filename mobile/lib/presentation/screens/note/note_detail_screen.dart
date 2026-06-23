@@ -54,6 +54,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
   bool _isEditing = false;
   int _activeTab = 0;
   String _selectedText = '';
+  final ScrollController _contentScrollController = ScrollController();
 
   @override
   void initState() {
@@ -71,7 +72,35 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
   void dispose() {
     _tabController.dispose();
     _editController.dispose();
+    _contentScrollController.dispose();
     super.dispose();
+  }
+
+  /// Switches to the Content tab and scrolls to the approximate location of a
+  /// highlighted passage. Anchoring can't be exact inside rendered Markdown, so
+  /// we estimate the position from the text's character offset.
+  void _jumpToHighlight(String text) {
+    _tabController.animateTo(0);
+    final note = ref.read(_noteProvider(widget.noteId)).value;
+    final raw = note?.rawText ?? '';
+    final idx = raw.toLowerCase().indexOf(text.trim().toLowerCase());
+
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted || !_contentScrollController.hasClients) return;
+      final max = _contentScrollController.position.maxScrollExtent;
+      final ratio = (idx < 0 || raw.isEmpty) ? 0.0 : idx / raw.length;
+      _contentScrollController.animateTo(
+        (max * ratio).clamp(0.0, max),
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+      );
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Jumped to where this was highlighted (approximate)'),
+      ),
+    );
   }
 
   /// Custom text-selection toolbar: our "Ask AI" action plus the platform
@@ -104,7 +133,10 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     );
   }
 
-  void _askAiAboutSelection(String selection) {
+  void _askAiAboutSelection(
+    String selection, {
+    void Function(String answer)? onSaveAnswer,
+  }) {
     if (!OpenAiClient.instance.hasKey) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -119,7 +151,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AskAiSheet(selection: selection),
+      builder: (_) =>
+          _AskAiSheet(selection: selection, onSaveAnswer: onSaveAnswer),
     );
   }
 
@@ -183,10 +216,25 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
             return _HighlightCard(
               highlight: h,
               isDark: isDark,
+              onGoToSource: () => _jumpToHighlight(h.text),
               onAskAi: () => _askAiAboutSelection(
                 (h.note != null && h.note!.isNotEmpty)
                     ? '${h.text}\n\n(My note: ${h.note})'
                     : h.text,
+                onSaveAnswer: (answer) {
+                  h.aiAnswer = answer;
+                  ref.read(highlightDatasourceProvider).save(h);
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) ref.invalidate(highlightsProvider(noteId));
+                  });
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('AI answer saved to highlight'),
+                      ),
+                    );
+                  }
+                },
               ),
               onDelete: () {
                 ref.read(highlightDatasourceProvider).delete(h.id);
@@ -323,6 +371,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
               children: [
                 // ── Content tab ─────────────────────────────────────
                 SingleChildScrollView(
+                  controller: _contentScrollController,
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -793,7 +842,11 @@ class _PulsingTextState extends State<_PulsingText>
 
 class _AskAiSheet extends ConsumerStatefulWidget {
   final String selection;
-  const _AskAiSheet({required this.selection});
+
+  /// When provided, a "Save answer" button appears once the answer finishes,
+  /// passing the answer text back to be persisted (e.g. onto a highlight).
+  final void Function(String answer)? onSaveAnswer;
+  const _AskAiSheet({required this.selection, this.onSaveAnswer});
 
   @override
   ConsumerState<_AskAiSheet> createState() => _AskAiSheetState();
@@ -954,6 +1007,31 @@ Explain this passage from my notes:
                       : MarkdownView(data: answer, selectable: true),
                 ),
               ),
+              // Save-answer footer (only when a save handler was provided)
+              if (widget.onSaveAnswer != null && _done && answer.isNotEmpty)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.screenPaddingH,
+                      Spacing.sm,
+                      Spacing.screenPaddingH,
+                      Spacing.md,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          widget.onSaveAnswer!(answer);
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.bookmark_add_rounded, size: 18),
+                        label: const Text('Save answer to highlight'),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -967,12 +1045,14 @@ Explain this passage from my notes:
 class _HighlightCard extends StatelessWidget {
   final HighlightModel highlight;
   final bool isDark;
+  final VoidCallback onGoToSource;
   final VoidCallback onAskAi;
   final VoidCallback onDelete;
 
   const _HighlightCard({
     required this.highlight,
     required this.isDark,
+    required this.onGoToSource,
     required this.onAskAi,
     required this.onDelete,
   });
@@ -1007,11 +1087,17 @@ class _HighlightCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      highlight.text,
-                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
-                      maxLines: 5,
-                      overflow: TextOverflow.ellipsis,
+                    // Quoted text — tap to jump to its source in Content.
+                    GestureDetector(
+                      onTap: onGoToSource,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        highlight.text,
+                        style:
+                            theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                        maxLines: 5,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     if (highlight.note != null &&
                         highlight.note!.isNotEmpty) ...[
@@ -1036,9 +1122,26 @@ class _HighlightCard extends StatelessWidget {
                         ],
                       ),
                     ],
+                    if (highlight.aiAnswer != null &&
+                        highlight.aiAnswer!.isNotEmpty) ...[
+                      const SizedBox(height: Spacing.sm),
+                      _CollapsibleAiAnswer(
+                        answer: highlight.aiAnswer!,
+                        isDark: isDark,
+                      ),
+                    ],
                     const SizedBox(height: Spacing.xs),
                     Row(
                       children: [
+                        TextButton.icon(
+                          onPressed: onGoToSource,
+                          icon: const Icon(Icons.my_location_rounded, size: 15),
+                          label: const Text('Source'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(0, 32),
+                          ),
+                        ),
                         TextButton.icon(
                           onPressed: onAskAi,
                           icon: const Icon(
@@ -1073,6 +1176,83 @@ class _HighlightCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Collapsible saved AI answer (hidden by default) ─────────────────────────
+
+class _CollapsibleAiAnswer extends StatefulWidget {
+  final String answer;
+  final bool isDark;
+  const _CollapsibleAiAnswer({required this.answer, required this.isDark});
+
+  @override
+  State<_CollapsibleAiAnswer> createState() => _CollapsibleAiAnswerState();
+}
+
+class _CollapsibleAiAnswerState extends State<_CollapsibleAiAnswer> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(Spacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: Spacing.borderRadiusSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: Spacing.borderRadiusSm,
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded,
+                    size: 13, color: AppColors.primary),
+                const SizedBox(width: 5),
+                Text(
+                  'AI answer',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  _expanded ? 'Hide' : 'Show',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AppColors.primary),
+                ),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity, height: 0),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: MarkdownView(data: widget.answer, selectable: true),
+            ),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+            sizeCurve: Curves.easeOutCubic,
+          ),
+        ],
       ),
     );
   }

@@ -556,7 +556,7 @@
     },
     {
       "id": "14:3468003717060621635",
-      "lastPropertyId": "6:7922856430410494492",
+      "lastPropertyId": "7:498284965081390234",
       "name": "HighlightModel",
       "properties": [
         {
@@ -589,6 +589,11 @@
           "id": "6:7922856430410494492",
           "name": "createdAt",
           "type": 10
+        },
+        {
+          "id": "7:498284965081390234",
+          "name": "aiAnswer",
+          "type": 9
         }
       ],
       "relations": []

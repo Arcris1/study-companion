@@ -87,27 +87,56 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
       );
 
       final llm = ref.read(llmServiceProvider);
-      final response = await llm.generate(prompt, maxTokens: 2048);
+      final response = await llm.generate(prompt, maxTokens: 3000);
 
-      // Parse the response
-      final jsonStr = '{"questions": [$response';
-      final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final questionList = parsed['questions'] as List;
+      // Parse the response robustly — the model may return a full
+      // {"questions":[...]} object (OpenAI JSON mode), a bare array, fenced
+      // JSON, or a continuation of the prompt's opening.
+      List questionList;
+      try {
+        questionList =
+            (jsonDecode(response) as Map<String, dynamic>)['questions'] as List;
+      } catch (_) {
+        try {
+          questionList = jsonDecode(response) as List;
+        } catch (_) {
+          try {
+            questionList = (jsonDecode('{"questions": [$response')
+                as Map<String, dynamic>)['questions'] as List;
+          } catch (_) {
+            final m = RegExp(r'\[[\s\S]*\]').firstMatch(response);
+            if (m == null) {
+              throw const FormatException('No valid JSON found in response');
+            }
+            questionList = jsonDecode(m.group(0)!) as List;
+          }
+        }
+      }
 
-      final questions = questionList.asMap().entries.map((entry) {
-        final q = entry.value as Map<String, dynamic>;
-        return QuizQuestion(
+      final questions = <QuizQuestion>[];
+      for (final raw in questionList) {
+        if (raw is! Map) continue;
+        final text = raw['question']?.toString().trim() ?? '';
+        final opts =
+            (raw['options'] as List?)?.map((e) => e.toString()).toList() ??
+                const <String>[];
+        final correct = raw['correct_answer']?.toString() ?? '';
+        if (text.isEmpty || opts.length < 2 || correct.isEmpty) continue;
+        questions.add(QuizQuestion(
           id: 0,
           quizId: 0,
-          question: q['question'] as String,
+          question: text,
           type: QuestionType.mcq,
-          options: (q['options'] as List).cast<String>(),
-          correctAnswer: q['correct_answer'] as String,
-          explanation: q['explanation'] as String?,
-          questionIndex: entry.key,
+          options: opts,
+          correctAnswer: correct,
+          explanation: raw['explanation']?.toString(),
+          questionIndex: questions.length,
           topic: widget.topic,
-        );
-      }).toList();
+        ));
+      }
+      if (questions.isEmpty) {
+        throw const FormatException('No valid questions were generated');
+      }
 
       setState(() {
         _questions = questions;

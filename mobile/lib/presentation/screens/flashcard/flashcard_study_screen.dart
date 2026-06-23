@@ -92,6 +92,20 @@ class _FlashcardStudyScreenState extends ConsumerState<FlashcardStudyScreen> {
     }
   }
 
+  /// Advance to the next card without recording a review (skip).
+  void _nextCard() {
+    if (_isReviewing || _currentIndex >= _dueCards.length) return;
+    if (_currentIndex >= _dueCards.length - 1) {
+      setState(() => _isComplete = true);
+    } else {
+      setState(() {
+        _currentIndex++;
+        _isFlipped = false;
+      });
+      _flipController.reset();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -103,7 +117,12 @@ class _FlashcardStudyScreenState extends ConsumerState<FlashcardStudyScreen> {
       appBar: AppBar(
         title: Text('Study', style: theme.textTheme.titleLarge),
         actions: [
-          if (_dueCards.isNotEmpty && !_isComplete)
+          if (_dueCards.isNotEmpty && !_isComplete) ...[
+            IconButton(
+              tooltip: 'Skip to next card',
+              icon: const Icon(Icons.skip_next_rounded),
+              onPressed: _isReviewing ? null : _nextCard,
+            ),
             Padding(
               padding: const EdgeInsets.only(right: Spacing.md),
               child: Center(
@@ -116,6 +135,7 @@ class _FlashcardStudyScreenState extends ConsumerState<FlashcardStudyScreen> {
                 ),
               ),
             ),
+          ],
         ],
       ),
       body: SafeArea(
@@ -210,13 +230,23 @@ class _FlashcardStudyScreenState extends ConsumerState<FlashcardStudyScreen> {
               ? _buildRatingButtons(theme, isDark)
               : Padding(
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
-                  child: Text(
-                    'Tap the card to flip',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isDark
-                          ? AppColors.onSurfaceVariantDark
-                          : AppColors.onSurfaceVariantLight,
-                    ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Tap the card to flip',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDark
+                              ? AppColors.onSurfaceVariantDark
+                              : AppColors.onSurfaceVariantLight,
+                        ),
+                      ),
+                      const SizedBox(height: Spacing.sm),
+                      OutlinedButton.icon(
+                        onPressed: _isReviewing ? null : _nextCard,
+                        icon: const Icon(Icons.skip_next_rounded, size: 18),
+                        label: const Text('Skip'),
+                      ),
+                    ],
                   ),
                 ),
         ),

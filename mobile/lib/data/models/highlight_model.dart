@@ -17,6 +17,9 @@ class HighlightModel {
 
   String? note;
 
+  /// A saved AI explanation of this highlight (from "Ask AI").
+  String? aiAnswer;
+
   DateTime createdAt;
 
   HighlightModel({
@@ -25,6 +28,7 @@ class HighlightModel {
     required this.text,
     required this.colorValue,
     this.note,
+    this.aiAnswer,
     required this.createdAt,
   });
 }

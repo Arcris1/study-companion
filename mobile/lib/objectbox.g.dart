@@ -684,7 +684,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(14, 3468003717060621635),
     name: 'HighlightModel',
-    lastPropertyId: const obx_int.IdUid(6, 7922856430410494492),
+    lastPropertyId: const obx_int.IdUid(7, 498284965081390234),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -721,6 +721,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(6, 7922856430410494492),
         name: 'createdAt',
         type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 498284965081390234),
+        name: 'aiAnswer',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -1709,13 +1715,17 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final noteOffset = object.note == null
             ? null
             : fbb.writeString(object.note!);
-        fbb.startTable(7);
+        final aiAnswerOffset = object.aiAnswer == null
+            ? null
+            : fbb.writeString(object.aiAnswer!);
+        fbb.startTable(8);
         fbb.addInt64(0, object.id);
         fbb.addInt64(1, object.noteId);
         fbb.addOffset(2, textOffset);
         fbb.addInt64(3, object.colorValue);
         fbb.addOffset(4, noteOffset);
         fbb.addInt64(5, object.createdAt.millisecondsSinceEpoch);
+        fbb.addOffset(6, aiAnswerOffset);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1746,6 +1756,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final noteParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 12);
+        final aiAnswerParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 16);
         final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
           const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0),
         );
@@ -1755,6 +1768,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           text: textParam,
           colorValue: colorValueParam,
           note: noteParam,
+          aiAnswer: aiAnswerParam,
           createdAt: createdAtParam,
         );
 
@@ -2265,5 +2279,10 @@ class HighlightModel_ {
   /// See [HighlightModel.createdAt].
   static final createdAt = obx.QueryDateProperty<HighlightModel>(
     _entities[13].properties[5],
+  );
+
+  /// See [HighlightModel.aiAnswer].
+  static final aiAnswer = obx.QueryStringProperty<HighlightModel>(
+    _entities[13].properties[6],
   );
 }
