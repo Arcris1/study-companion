@@ -205,15 +205,21 @@ class _SourceChipState extends State<_SourceChip> {
   @override
   Widget build(BuildContext context) {
     final chipBg = widget.theme.colorScheme.surfaceContainerHighest;
+    // Sources are stored as "<note title>\n<snippet>".
+    final parts = widget.content.split('\n');
+    final title = parts.first.trim();
+    final snippet = parts.length > 1 ? parts.sublist(1).join('\n').trim() : '';
+    final hasSnippet = snippet.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         GestureDetector(
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap:
+              hasSnippet ? () => setState(() => _expanded = !_expanded) : null,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: chipBg,
               borderRadius: Spacing.borderRadiusPill,
@@ -223,56 +229,68 @@ class _SourceChipState extends State<_SourceChip> {
               children: [
                 Icon(
                   Icons.description_rounded,
-                  size: 10,
-                  color: widget.theme.colorScheme.onSurfaceVariant,
+                  size: 12,
+                  color: widget.theme.colorScheme.primary,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Flexible(
                   child: Text(
-                    widget.content.length > 30
-                        ? '${widget.content.substring(0, 30).trim()}...'
-                        : widget.content,
+                    title,
                     style: widget.theme.textTheme.labelSmall?.copyWith(
-                      color: widget.theme.colorScheme.onSurfaceVariant,
-                      fontSize: 10,
+                      color: widget.theme.colorScheme.onSurface,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (hasSnippet) ...[
+                  const SizedBox(width: 2),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 14,
+                    color: widget.theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
               ],
             ),
           ),
         ),
-        // Expandable source content
-        AnimatedCrossFade(
-          firstChild: const SizedBox.shrink(),
-          secondChild: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: widget.isDark
-                    ? AppColors.surfaceVariantDark
-                    : AppColors.surfaceVariantLight,
-                borderRadius: Spacing.borderRadiusSm,
-              ),
-              child: Text(
-                widget.content,
-                style: widget.theme.textTheme.bodySmall?.copyWith(
-                  color: widget.theme.colorScheme.onSurfaceVariant,
+        // Expandable supporting snippet
+        if (hasSnippet)
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(maxWidth: 240),
+                decoration: BoxDecoration(
+                  color: widget.isDark
+                      ? AppColors.surfaceVariantDark
+                      : AppColors.surfaceVariantLight,
+                  borderRadius: Spacing.borderRadiusSm,
                 ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  snippet,
+                  style: widget.theme.textTheme.bodySmall?.copyWith(
+                    color: widget.theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+            sizeCurve: Curves.easeOutCubic,
           ),
-          crossFadeState: _expanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 200),
-          sizeCurve: Curves.easeOutCubic,
-        ),
       ],
     );
   }

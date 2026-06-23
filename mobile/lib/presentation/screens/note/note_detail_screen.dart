@@ -453,7 +453,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     if (!_showSummary) {
       return Center(
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 280),
+          constraints: const BoxConstraints(maxWidth: 320),
           padding: const EdgeInsets.all(Spacing.xl),
           decoration: BoxDecoration(
             color: isDark

@@ -10,6 +10,7 @@ import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
 import '../../providers/notebook_provider.dart';
+import '../../../domain/entities/notebook.dart';
 import '../../../core/openai/openai_client.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
@@ -216,6 +217,10 @@ class HomeScreen extends ConsumerWidget {
                                   isDark: isDark,
                                   onTap: () =>
                                       context.push('/notebook/${notebook.id}'),
+                                  onEdit: () =>
+                                      _editNotebook(context, ref, notebook),
+                                  onDelete: () =>
+                                      _deleteNotebook(context, ref, notebook),
                                 ),
                               ),
                             ),
@@ -250,6 +255,126 @@ class HomeScreen extends ConsumerWidget {
     } catch (_) {
       return AppColors.primary;
     }
+  }
+
+  Future<void> _editNotebook(
+      BuildContext context, WidgetRef ref, Notebook notebook) async {
+    final result = await showDialog<({String title, String description})>(
+      context: context,
+      builder: (_) => _EditNotebookDialog(
+        initialTitle: notebook.title,
+        initialDescription: notebook.description ?? '',
+      ),
+    );
+    if (result == null || result.title.trim().isEmpty) return;
+    await ref.read(notebooksProvider.notifier).update(
+          notebook.copyWith(
+            title: result.title.trim(),
+            description: result.description.trim(),
+          ),
+        );
+  }
+
+  Future<void> _deleteNotebook(
+      BuildContext context, WidgetRef ref, Notebook notebook) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Notebook?'),
+        content: Text(
+          'Delete "${notebook.title}"? This permanently removes all its notes, '
+          'quizzes, flashcards and chats.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await ref.read(notebooksProvider.notifier).delete(notebook.id);
+  }
+}
+
+// Self-disposing edit dialog (owns its controllers — avoids the
+// dispose-during-route-teardown race).
+class _EditNotebookDialog extends StatefulWidget {
+  final String initialTitle;
+  final String initialDescription;
+  const _EditNotebookDialog({
+    required this.initialTitle,
+    required this.initialDescription,
+  });
+
+  @override
+  State<_EditNotebookDialog> createState() => _EditNotebookDialogState();
+}
+
+class _EditNotebookDialogState extends State<_EditNotebookDialog> {
+  late final TextEditingController _titleCtrl =
+      TextEditingController(text: widget.initialTitle);
+  late final TextEditingController _descCtrl =
+      TextEditingController(text: widget.initialDescription);
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    Navigator.of(context).pop((
+      title: _titleCtrl.text,
+      description: _descCtrl.text,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Notebook'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _titleCtrl,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: Spacing.md),
+          TextField(
+            controller: _descCtrl,
+            minLines: 1,
+            maxLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Description (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
   }
 }
 
@@ -453,6 +578,8 @@ class _NotebookCard extends StatelessWidget {
   final Color color;
   final bool isDark;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _NotebookCard({
     required this.title,
@@ -460,6 +587,8 @@ class _NotebookCard extends StatelessWidget {
     required this.color,
     required this.isDark,
     required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -499,21 +628,66 @@ class _NotebookCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Icon container
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: Spacing.borderRadiusSm,
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.menu_book_rounded,
-                            size: 18,
-                            color: color,
+                      // Icon container + overflow menu
+                      Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: Spacing.borderRadiusSm,
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.menu_book_rounded,
+                                size: 18,
+                                color: color,
+                              ),
+                            ),
                           ),
-                        ),
+                          const Spacer(),
+                          SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: PopupMenuButton<String>(
+                              padding: EdgeInsets.zero,
+                              tooltip: 'Options',
+                              icon: Icon(
+                                Icons.more_vert_rounded,
+                                size: 18,
+                                color: isDark
+                                    ? AppColors.onSurfaceVariantDark
+                                    : AppColors.onSurfaceVariantLight,
+                              ),
+                              onSelected: (v) {
+                                if (v == 'edit') {
+                                  onEdit();
+                                } else if (v == 'delete') {
+                                  onDelete();
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(children: [
+                                    Icon(Icons.edit_rounded, size: 18),
+                                    SizedBox(width: 12),
+                                    Text('Edit'),
+                                  ]),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(children: [
+                                    Icon(Icons.delete_outline_rounded, size: 18),
+                                    SizedBox(width: 12),
+                                    Text('Delete'),
+                                  ]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
 
                       const SizedBox(height: Spacing.listItemGap),

@@ -9,6 +9,7 @@ import '../datasources/local/chat_local_datasource.dart';
 import '../datasources/local/note_local_datasource.dart';
 import '../models/chat_session_model.dart';
 import '../models/chat_message_model.dart';
+import '../models/note_chunk_model.dart';
 
 class ChatRepository implements IChatRepository {
   final ChatLocalDatasource _chatDatasource;
@@ -76,26 +77,26 @@ class ChatRepository implements IChatRepository {
     // use the previous conversation to understand what the user is asking about
     final searchQuery = _buildSearchQuery(message, recentMessages);
 
-    // RAG: Search for relevant chunks in this notebook
-    final relevantChunks = <String>[];
+    // RAG: Search for relevant chunks in this notebook. Keep the chunk objects
+    // (not just text) so each can be attributed to its source note.
+    final relevantChunks = <NoteChunkModel>[];
     if (session != null && searchQuery.isNotEmpty) {
       if (_embeddingService.isReady) {
         try {
           final queryEmbedding = await _embeddingService.embed(searchQuery);
-          final chunks = _noteDatasource.searchChunksByVector(
+          relevantChunks.addAll(_noteDatasource.searchChunksByVector(
             session.notebookId,
             queryEmbedding,
-          );
-          relevantChunks.addAll(chunks.map((c) => c.text));
+          ));
         } catch (_) {
-          final chunks =
-              _noteDatasource.searchChunks(session.notebookId, searchQuery);
-          relevantChunks.addAll(chunks.map((c) => c.text));
+          relevantChunks.addAll(
+            _noteDatasource.searchChunks(session.notebookId, searchQuery),
+          );
         }
       } else {
-        final chunks =
-            _noteDatasource.searchChunks(session.notebookId, searchQuery);
-        relevantChunks.addAll(chunks.map((c) => c.text));
+        relevantChunks.addAll(
+          _noteDatasource.searchChunks(session.notebookId, searchQuery),
+        );
       }
     }
 
@@ -104,11 +105,28 @@ class ChatRepository implements IChatRepository {
     if (relevantChunks.isNotEmpty) {
       final buffer = StringBuffer();
       for (final chunk in relevantChunks) {
-        if (buffer.length + chunk.length > 8000) break;
+        if (buffer.length + chunk.text.length > 8000) break;
         if (buffer.isNotEmpty) buffer.write('\n');
-        buffer.write(chunk);
+        buffer.write(chunk.text);
       }
       if (buffer.isNotEmpty) context = buffer.toString();
+    }
+
+    // Build readable sources: one entry per cited note, stored as
+    // "<note title>\n<snippet>" (the bubble shows the title, expands to snippet).
+    final sources = <String>[];
+    final seenNotes = <int>{};
+    for (final chunk in relevantChunks) {
+      if (!seenNotes.add(chunk.noteId)) continue;
+      final note = _noteDatasource.getById(chunk.noteId);
+      final title = (note != null && note.title.trim().isNotEmpty)
+          ? note.title.trim()
+          : 'Untitled note';
+      final snippet = chunk.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final shortSnippet = snippet.length > 180
+          ? '${snippet.substring(0, 180).trim()}…'
+          : snippet;
+      sources.add('$title\n$shortSnippet');
     }
 
     final historyStr = _buildHistory(recentMessages, maxMessages: 10);
@@ -136,8 +154,8 @@ class ChatRepository implements IChatRepository {
       isUser: false,
       createdAt: DateTime.now(),
     );
-    if (relevantChunks.isNotEmpty) {
-      assistantMessage.sourceChunks = relevantChunks;
+    if (sources.isNotEmpty) {
+      assistantMessage.sourceChunks = sources;
     }
     _chatDatasource.saveMessage(assistantMessage);
   }

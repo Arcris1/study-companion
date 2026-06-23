@@ -192,6 +192,8 @@ class _ScButtonState extends State<ScButton>
           color: textColor,
           fontWeight: FontWeight.w500,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
       );
 
       if (widget.icon != null) {
@@ -200,7 +202,9 @@ class _ScButtonState extends State<ScButton>
           children: [
             Icon(widget.icon, size: iconSize, color: textColor),
             const SizedBox(width: 8),
-            labelWidget,
+            // Flexible so the label ellipsizes instead of overflowing when the
+            // button sits in a tight container.
+            Flexible(child: labelWidget),
           ],
         );
       } else {
