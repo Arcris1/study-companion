@@ -20,9 +20,16 @@ class PlannerLocalDatasource {
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
+    // `date` is stored as PropertyType.dateNano (nanoseconds since epoch).
+    // Dart DateTime is microsecond-precision, so nanos = micros * 1000.
+    // The old code queried with microsecondsSinceEpoch, which never matched
+    // the nanosecond-scale stored values → plan was never found.
+    final startNanos = startOfDay.microsecondsSinceEpoch * 1000;
+    final endNanos = endOfDay.microsecondsSinceEpoch * 1000;
+
     final query = _box
-        .query(StudyPlanModel_.date.greaterOrEqual(startOfDay.microsecondsSinceEpoch) &
-            StudyPlanModel_.date.lessThan(endOfDay.microsecondsSinceEpoch))
+        .query(StudyPlanModel_.date.greaterOrEqual(startNanos) &
+            StudyPlanModel_.date.lessThan(endNanos))
         .order(StudyPlanModel_.generatedAt, flags: Order.descending)
         .build();
     final result = query.findFirst();

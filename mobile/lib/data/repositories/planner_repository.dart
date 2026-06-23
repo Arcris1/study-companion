@@ -67,6 +67,27 @@ class PlannerRepository {
     return saved.toEntity();
   }
 
+  /// Appends a manually-created [task] to today's plan, creating the plan if
+  /// none exists yet.
+  Future<StudyPlan> addTask(StudyTask task) async {
+    final today = DateTime.now();
+    final existing = _datasource.getPlanForDate(today);
+
+    if (existing == null) {
+      final model = StudyPlanModel(
+        date: DateTime(today.year, today.month, today.day),
+        generatedAt: today,
+      );
+      model.tasks = [task];
+      return _datasource.savePlan(model).toEntity();
+    }
+
+    final updated = List<StudyTask>.from(existing.tasks)..add(task);
+    existing.tasks = updated;
+    _datasource.updatePlan(existing);
+    return existing.toEntity();
+  }
+
   Future<StudyPlan> toggleTask(int planId, int taskIndex) async {
     final model = _datasource.getPlanForDate(DateTime.now());
     if (model == null || model.id != planId) {

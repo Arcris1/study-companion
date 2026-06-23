@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../config/theme/gradients.dart';
@@ -6,7 +7,6 @@ import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
 import '../../../domain/entities/study_plan.dart';
 import '../../providers/planner_provider.dart';
-import '../../providers/notebook_provider.dart';
 import '../../widgets/common/sc_button.dart';
 
 class DailyPlannerScreen extends ConsumerStatefulWidget {
@@ -140,6 +140,13 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
           variant: ScButtonVariant.gradient,
           onPressed: _generatePlan,
         ),
+        const SizedBox(height: Spacing.sm),
+        ScButton(
+          label: 'Add a task manually',
+          icon: Icons.add_rounded,
+          variant: ScButtonVariant.outlined,
+          onPressed: _addTask,
+        ),
       ],
     );
   }
@@ -246,13 +253,27 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            TextButton.icon(
-              onPressed: _regeneratePlan,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Regenerate'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-              ),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _addTask,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _regeneratePlan,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Regenerate'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -281,16 +302,20 @@ class _DailyPlannerScreenState extends ConsumerState<DailyPlannerScreen> {
   }
 
   Future<void> _generatePlan() async {
-    final notebooks = ref.read(notebooksProvider).value ?? [];
-    final recentNotebooks =
-        notebooks.take(5).map((n) => n.title).toList();
-
     ref.read(todayPlanProvider.notifier).generatePlan(
           availableMinutes: _availableMinutes,
-          dueFlashcardDecks: [], // Could be populated from flashcard provider
-          weakTopics: [], // Could be populated from weakness provider
-          recentNotebooks: recentNotebooks,
         );
+  }
+
+  Future<void> _addTask() async {
+    final task = await showModalBottomSheet<StudyTask>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _AddTaskSheet(),
+    );
+    if (task == null) return;
+    ref.read(todayPlanProvider.notifier).addTask(task);
   }
 
   Future<void> _regeneratePlan() async {
@@ -568,6 +593,161 @@ class _TaskCard extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Add-task sheet ──────────────────────────────────────────────────────────
+
+class _AddTaskSheet extends StatefulWidget {
+  const _AddTaskSheet();
+
+  @override
+  State<_AddTaskSheet> createState() => _AddTaskSheetState();
+}
+
+class _AddTaskSheetState extends State<_AddTaskSheet> {
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _minutesCtrl = TextEditingController(text: '15');
+  String _type = 'note_reading';
+
+  static const _types = <(String, String)>[
+    ('note_reading', 'Reading'),
+    ('flashcard_review', 'Flashcards'),
+    ('quiz_review', 'Quiz'),
+    ('weak_area_focus', 'Weak area'),
+    ('general', 'General'),
+  ];
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    _minutesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) return;
+    final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 15;
+    Navigator.of(context).pop(StudyTask(
+      title: title,
+      description: _descCtrl.text.trim(),
+      type: _type,
+      estimatedMinutes: minutes.clamp(1, 600),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          Spacing.screenPaddingH,
+          Spacing.md,
+          Spacing.screenPaddingH,
+          Spacing.lg + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: Spacing.md),
+            Text('Add Task', style: theme.textTheme.titleMedium),
+            const SizedBox(height: Spacing.md),
+            TextField(
+              controller: _titleCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: Spacing.sm),
+            TextField(
+              controller: _descCtrl,
+              minLines: 1,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: Spacing.md),
+            Text('Type',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+            const SizedBox(height: Spacing.sm),
+            Wrap(
+              spacing: Spacing.sm,
+              runSpacing: Spacing.sm,
+              children: _types.map((t) {
+                final selected = _type == t.$1;
+                return ChoiceChip(
+                  label: Text(t.$2),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _type = t.$1),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: Spacing.md),
+            Row(
+              children: [
+                Text('Minutes',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    )),
+                const SizedBox(width: Spacing.md),
+                SizedBox(
+                  width: 96,
+                  child: TextField(
+                    controller: _minutesCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: Spacing.lg),
+            ScButton(
+              label: 'Add task',
+              icon: Icons.add_rounded,
+              variant: ScButtonVariant.gradient,
+              expanded: true,
+              onPressed: _save,
             ),
           ],
         ),
