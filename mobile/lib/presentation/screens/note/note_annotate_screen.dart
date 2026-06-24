@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../config/theme/app_colors.dart';
@@ -28,6 +28,10 @@ const List<int> _penColors = [
   0xFF111827, // ink
 ];
 
+/// Selectable tip sizes (stroke widths) for the pen and the highlighter.
+const List<double> _penSizes = [2, 4, 6, 9];
+const List<double> _markerSizes = [10, 18, 28, 40];
+
 enum _Tool { move, pen, highlighter, eraser, sidenote, box }
 
 class _Stroke {
@@ -43,11 +47,13 @@ class _Stroke {
   });
 
   Map<String, dynamic> toJson() => {
-        'c': colorValue,
-        'w': width,
-        'h': highlighter,
-        'p': [for (final o in points) ...[o.dx, o.dy]],
-      };
+    'c': colorValue,
+    'w': width,
+    'h': highlighter,
+    'p': [
+      for (final o in points) ...[o.dx, o.dy],
+    ],
+  };
 
   factory _Stroke.fromJson(Map<String, dynamic> m) {
     final flat = (m['p'] as List).map((e) => (e as num).toDouble()).toList();
@@ -71,9 +77,9 @@ class _Sidenote {
 
   Map<String, dynamic> toJson() => {'x': pos.dx, 'y': pos.dy, 't': text};
   factory _Sidenote.fromJson(Map<String, dynamic> m) => _Sidenote(
-        Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble()),
-        m['t'] as String? ?? '',
-      );
+    Offset((m['x'] as num).toDouble(), (m['y'] as num).toDouble()),
+    m['t'] as String? ?? '',
+  );
 }
 
 class NoteAnnotateScreen extends ConsumerStatefulWidget {
@@ -96,7 +102,10 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   _Tool _tool = _Tool.move;
   int _colorIndex = 5; // ink
+  double _penWidth = 4;
+  double _markerWidth = 18;
   bool _dirty = false;
+  bool _fullscreen = false;
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _captureKey = GlobalKey();
@@ -119,13 +128,22 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  void _toggleFullscreen() {
+    setState(() => _fullscreen = !_fullscreen);
+    SystemChrome.setEnabledSystemUIMode(
+      _fullscreen ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
   }
 
   Future<void> _load() async {
     final note = await ref.read(noteRepositoryProvider).getById(widget.noteId);
-    final ann =
-        ref.read(noteAnnotationDatasourceProvider).getByNoteId(widget.noteId);
+    final ann = ref
+        .read(noteAnnotationDatasourceProvider)
+        .getByNoteId(widget.noteId);
     if (ann != null) {
       for (final s in (jsonDecode(ann.strokesJson) as List)) {
         _strokes.add(_Stroke.fromJson(s as Map<String, dynamic>));
@@ -144,9 +162,8 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   }
 
   Future<void> _save() async {
-    final model = ref
-            .read(noteAnnotationDatasourceProvider)
-            .getByNoteId(widget.noteId) ??
+    final model =
+        ref.read(noteAnnotationDatasourceProvider).getByNoteId(widget.noteId) ??
         NoteAnnotationModel(noteId: widget.noteId, updatedAt: DateTime.now());
     model
       ..strokesJson = jsonEncode(_strokes.map((s) => s.toJson()).toList())
@@ -171,7 +188,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
         _current = _Stroke(
           points: [p],
           colorValue: _activeColor,
-          width: _tool == _Tool.highlighter ? 18 : 3,
+          width: _tool == _Tool.highlighter ? _markerWidth : _penWidth,
           highlighter: _tool == _Tool.highlighter,
         );
       });
@@ -200,8 +217,9 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       if (_current != null) setState(() => _current = null);
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
-        _scrollController
-            .jumpTo((_scrollController.offset - delta.dy).clamp(0.0, max));
+        _scrollController.jumpTo(
+          (_scrollController.offset - delta.dy).clamp(0.0, max),
+        );
       }
       return;
     }
@@ -241,8 +259,10 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   void _flingScroll(double velocityY) {
     if (!_scrollController.hasClients || velocityY.abs() < 80) return;
     final max = _scrollController.position.maxScrollExtent;
-    final target =
-        (_scrollController.offset - velocityY * 0.25).clamp(0.0, max);
+    final target = (_scrollController.offset - velocityY * 0.25).clamp(
+      0.0,
+      max,
+    );
     final dist = (target - _scrollController.offset).abs();
     if (dist < 1) return;
     _scrollController.animateTo(
@@ -290,10 +310,8 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   Future<String?> _editSidenoteText({required String initial}) {
     return showDialog<String?>(
       context: context,
-      builder: (ctx) => _SidenoteDialog(
-        initialText: initial,
-        onAiAssist: _generateSidenote,
-      ),
+      builder: (ctx) =>
+          _SidenoteDialog(initialText: initial, onAiAssist: _generateSidenote),
     );
   }
 
@@ -302,7 +320,8 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       throw Exception('No OpenAI API key set (Settings > AI)');
     }
     final h = hint.trim();
-    final prompt = '''<|begin_of_turn|>system
+    final prompt =
+        '''<|begin_of_turn|>system
 You write concise study margin-notes (1-3 short sentences). Output ONLY the note text — no preamble, labels or quotes.<|end_of_turn|>
 <|begin_of_turn|>user
 Lecture/note title: "$_title".
@@ -310,9 +329,10 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
 <|begin_of_turn|>assistant
 ''';
     final buf = StringBuffer();
-    await for (final t in ref
-        .read(llmServiceProvider)
-        .generateStream(prompt, maxTokens: 220)) {
+    await for (final t
+        in ref
+            .read(llmServiceProvider)
+            .generateStream(prompt, maxTokens: 220)) {
       buf.write(t);
     }
     return buf.toString().trim();
@@ -336,21 +356,26 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
     }
     setState(() => _capturing = true);
     try {
-      final boundary = _captureKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
+      final boundary =
+          _captureKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
       const pr = 3.0;
       final fullImage = await boundary.toImage(pixelRatio: pr);
       final src = Rect.fromLTWH(
-          rect.left * pr, rect.top * pr, rect.width * pr, rect.height * pr);
+        rect.left * pr,
+        rect.top * pr,
+        rect.width * pr,
+        rect.height * pr,
+      );
       final dst = Rect.fromLTWH(0, 0, rect.width * pr, rect.height * pr);
       final recorder = ui.PictureRecorder();
       Canvas(recorder)
         ..drawColor(Colors.white, BlendMode.src)
         ..drawImageRect(fullImage, src, dst, Paint());
       final cropped = await recorder.endRecording().toImage(
-            (rect.width * pr).round(),
-            (rect.height * pr).round(),
-          );
+        (rect.width * pr).round(),
+        (rect.height * pr).round(),
+      );
       final bytes = await cropped.toByteData(format: ui.ImageByteFormat.png);
       fullImage.dispose();
       cropped.dispose();
@@ -365,9 +390,9 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Couldn\'t read the box: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Couldn\'t read the box: $e')));
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
@@ -390,12 +415,14 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         content: const Text('This removes every stroke and sidenote.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              style: TextButton.styleFrom(foregroundColor: AppColors.error),
-              child: const Text('Clear')),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Clear'),
+          ),
         ],
       ),
     );
@@ -423,11 +450,20 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         backgroundColor: theme.brightness == Brightness.dark
             ? const Color(0xFF15151E)
             : Colors.white,
-        appBar: AppBar(
-          title: Text(_title,
-              style: theme.textTheme.titleMedium,
-              overflow: TextOverflow.ellipsis),
+        appBar: _fullscreen
+            ? null
+            : AppBar(
+          title: Text(
+            _title,
+            style: theme.textTheme.titleMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: [
+            IconButton(
+              tooltip: 'Fullscreen',
+              icon: const Icon(Icons.fullscreen_rounded),
+              onPressed: _toggleFullscreen,
+            ),
             IconButton(
               tooltip: 'Preview (exit annotate)',
               icon: const Icon(Icons.visibility_rounded),
@@ -453,11 +489,32 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         ),
         body: !_loaded
             ? const Center(child: CircularProgressIndicator())
-            : Column(
+            : Stack(
                 children: [
-                  Expanded(child: _buildPage(theme)),
-                  if (boxReady) _buildBoxBar(theme),
-                  _buildToolbar(theme),
+                  Column(
+                    children: [
+                      Expanded(child: _buildPage(theme)),
+                      if (boxReady) _buildBoxBar(theme),
+                      _buildToolbar(theme),
+                    ],
+                  ),
+                  if (_fullscreen)
+                    Positioned(
+                      top: MediaQuery.of(context).padding.top + 8,
+                      right: 12,
+                      child: Material(
+                        color: (theme.brightness == Brightness.dark
+                                ? Colors.black
+                                : Colors.white)
+                            .withValues(alpha: 0.55),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: 'Exit fullscreen',
+                          icon: const Icon(Icons.fullscreen_exit_rounded),
+                          onPressed: _toggleFullscreen,
+                        ),
+                      ),
+                    ),
                 ],
               ),
       ),
@@ -469,7 +526,9 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
       color: AppColors.primary.withValues(alpha: 0.10),
       child: Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: Spacing.md, vertical: Spacing.xs),
+          horizontal: Spacing.md,
+          vertical: Spacing.xs,
+        ),
         child: Row(
           children: [
             Icon(Icons.crop_free_rounded, size: 16, color: AppColors.primary),
@@ -499,90 +558,116 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
   Widget _buildPage(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      physics: const NeverScrollableScrollPhysics(), // scroll driven manually
-      child: FittedBox(
-        fit: BoxFit.fitWidth,
-        alignment: Alignment.topCenter,
-        child: SizedBox(
-          width: _kPageWidth,
-          child: Stack(
-            children: [
-              // Capturable layer: content + ink (used by Box-AI).
-              RepaintBoundary(
-                key: _captureKey,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: _kPageWidth,
-                      color: isDark ? const Color(0xFF15151E) : Colors.white,
-                      padding: const EdgeInsets.all(16),
-                      child: _sourceType == 'md'
-                          ? MarkdownView(data: _rawText, selectable: false)
-                          : Text(
-                              _rawText,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                height: 1.7,
-                                color: isDark
-                                    ? AppColors.onSurfaceDark
-                                    : AppColors.onSurfaceLight,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use the full screen width on tablets so the ink page fills the screen
+        // (FittedBox scales the fixed-width page up — text grows proportionally).
+        final displayWidth = constraints.maxWidth;
+        return SingleChildScrollView(
+          controller: _scrollController,
+          physics:
+              const NeverScrollableScrollPhysics(), // scroll driven manually
+          child: Center(
+            child: SizedBox(
+              width: displayWidth,
+              child: FittedBox(
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: _kPageWidth,
+                  child: Stack(
+                    children: [
+                      // Capturable layer: content + ink (used by Box-AI).
+                      RepaintBoundary(
+                        key: _captureKey,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: _kPageWidth,
+                              color: isDark
+                                  ? const Color(0xFF15151E)
+                                  : Colors.white,
+                              padding: const EdgeInsets.all(16),
+                              child: _sourceType == 'md'
+                                  ? MarkdownView(
+                                      data: _rawText,
+                                      selectable: false,
+                                    )
+                                  : Text(
+                                      _rawText,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            height: 1.7,
+                                            color: isDark
+                                                ? AppColors.onSurfaceDark
+                                                : AppColors.onSurfaceLight,
+                                          ),
+                                    ),
+                            ),
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _InkPainter(_strokes, _current),
+                                ),
                               ),
                             ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: CustomPaint(
-                            painter: _InkPainter(_strokes, _current)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              // Box overlay
-              if (_boxRect != null)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(painter: _BoxPainter(_boxRect!)),
+                      // Box overlay
+                      if (_boxRect != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(painter: _BoxPainter(_boxRect!)),
+                          ),
+                        ),
+                      // Gesture capture
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onScaleStart: _onScaleStart,
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleEnd: _onScaleEnd,
+                          onTapUp: _tool == _Tool.sidenote
+                              ? (d) => _addSidenoteAt(d.localPosition)
+                              : null,
+                        ),
+                      ),
+                      // Sidenote markers (above gesture so they stay tappable)
+                      for (var i = 0; i < _sidenotes.length; i++)
+                        Positioned(
+                          left: _sidenotes[i].pos.dx - 12,
+                          top: _sidenotes[i].pos.dy - 12,
+                          child: GestureDetector(
+                            onTap: () => _openSidenote(i),
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: AppColors.warning,
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x33000000),
+                                    blurRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.sticky_note_2_rounded,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-              // Gesture capture
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onScaleStart: _onScaleStart,
-                  onScaleUpdate: _onScaleUpdate,
-                  onScaleEnd: _onScaleEnd,
-                  onTapUp: _tool == _Tool.sidenote
-                      ? (d) => _addSidenoteAt(d.localPosition)
-                      : null,
-                ),
               ),
-              // Sidenote markers (above gesture so they stay tappable)
-              for (var i = 0; i < _sidenotes.length; i++)
-                Positioned(
-                  left: _sidenotes[i].pos.dx - 12,
-                  top: _sidenotes[i].pos.dy - 12,
-                  child: GestureDetector(
-                    onTap: () => _openSidenote(i),
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: AppColors.warning,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: const [
-                          BoxShadow(color: Color(0x33000000), blurRadius: 3),
-                        ],
-                      ),
-                      child: const Icon(Icons.sticky_note_2_rounded,
-                          size: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -597,7 +682,9 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(
-              horizontal: Spacing.sm, vertical: Spacing.xs),
+            horizontal: Spacing.sm,
+            vertical: Spacing.xs,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -629,6 +716,19 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                     ],
                   ),
                 ),
+              if (showColors)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (final size in (_tool == _Tool.highlighter
+                          ? _markerSizes
+                          : _penSizes))
+                        _sizeDot(size, isDark),
+                    ],
+                  ),
+                ),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -637,15 +737,22 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                     _toolBtn(Icons.edit_rounded, 'Pen', _Tool.pen),
                     _toolBtn(Icons.brush_rounded, 'Marker', _Tool.highlighter),
                     _toolBtn(
-                        Icons.auto_fix_normal_rounded, 'Eraser', _Tool.eraser),
+                      Icons.auto_fix_normal_rounded,
+                      'Eraser',
+                      _Tool.eraser,
+                    ),
                     _toolBtn(
-                        Icons.sticky_note_2_outlined, 'Note', _Tool.sidenote),
+                      Icons.sticky_note_2_outlined,
+                      'Note',
+                      _Tool.sidenote,
+                    ),
                     _toolBtn(Icons.crop_free_rounded, 'Box AI', _Tool.box),
                     const SizedBox(width: 4),
                     Container(
-                        width: 1,
-                        height: 28,
-                        color: theme.colorScheme.outlineVariant),
+                      width: 1,
+                      height: 28,
+                      color: theme.colorScheme.outlineVariant,
+                    ),
                     IconButton(
                       tooltip: 'Undo',
                       onPressed: _strokes.isEmpty ? null : _undo,
@@ -662,6 +769,44 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sizeDot(double size, bool isDark) {
+    final current = _tool == _Tool.highlighter ? _markerWidth : _penWidth;
+    final selected = current == size;
+    final dia = size.clamp(4, 24).toDouble();
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (_tool == _Tool.highlighter) {
+          _markerWidth = size;
+        } else {
+          _penWidth = size;
+        }
+      }),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: 34,
+        height: 28,
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Container(
+            width: dia,
+            height: dia,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected
+                  ? AppColors.primary
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),
@@ -689,20 +834,24 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon,
-                  size: 20,
+              Icon(
+                icon,
+                size: 20,
+                color: selected
+                    ? AppColors.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
                   color: selected
                       ? AppColors.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant),
-              const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: selected
-                        ? AppColors.primary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  )),
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
             ],
           ),
         ),
@@ -720,8 +869,9 @@ class _InkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (final s in [...strokes, ?current]) {
       final paint = Paint()
-        ..color =
-            Color(s.colorValue).withValues(alpha: s.highlighter ? 0.32 : 1.0)
+        ..color = Color(
+          s.colorValue,
+        ).withValues(alpha: s.highlighter ? 0.32 : 1.0)
         ..strokeWidth = s.width
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
@@ -755,7 +905,9 @@ class _BoxPainter extends CustomPainter {
       rect.top < rect.bottom ? rect.bottom : rect.top,
     );
     canvas.drawRect(
-        r, Paint()..color = const Color(0xFF7C3AED).withValues(alpha: 0.12));
+      r,
+      Paint()..color = const Color(0xFF7C3AED).withValues(alpha: 0.12),
+    );
     canvas.drawRect(
       r,
       Paint()
@@ -796,15 +948,20 @@ class _BoxAiSheetState extends State<_BoxAiSheet> {
         'shown clearly and concisely for studying. If it includes a diagram, '
         'formula or table, explain what it means. Use Markdown.';
     try {
-      await for (final t in OpenAiClient.instance
-          .visionStream(prompt, widget.png, maxTokens: 700)) {
+      await for (final t in OpenAiClient.instance.visionStream(
+        prompt,
+        widget.png,
+        maxTokens: 700,
+      )) {
         if (!mounted) return;
         setState(() => _buf.write(t));
       }
       if (mounted) setState(() => _done = true);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('LlmException: ', ''));
+        setState(
+          () => _error = e.toString().replaceFirst('LlmException: ', ''),
+        );
       }
     }
   }
@@ -833,8 +990,9 @@ class _BoxAiSheetState extends State<_BoxAiSheet> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurfaceVariant
-                      .withValues(alpha: 0.3),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.3,
+                  ),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -842,8 +1000,11 @@ class _BoxAiSheetState extends State<_BoxAiSheet> {
                 padding: const EdgeInsets.all(Spacing.screenPaddingH),
                 child: Row(
                   children: [
-                    Icon(Icons.auto_awesome_rounded,
-                        size: 20, color: AppColors.primary),
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
                     const SizedBox(width: Spacing.sm),
                     Text('Explain region', style: theme.textTheme.titleMedium),
                     const Spacer(),
@@ -858,8 +1019,11 @@ class _BoxAiSheetState extends State<_BoxAiSheet> {
               ),
               ClipRRect(
                 borderRadius: Spacing.borderRadiusSm,
-                child: Image.memory(widget.png,
-                    height: 110, fit: BoxFit.contain),
+                child: Image.memory(
+                  widget.png,
+                  height: 110,
+                  fit: BoxFit.contain,
+                ),
               ),
               const SizedBox(height: Spacing.sm),
               const Divider(height: 1),
@@ -891,11 +1055,13 @@ class _BoxAiSheetState extends State<_BoxAiSheet> {
                           ),
                         )
                       : answer.isEmpty
-                          ? Text('Reading the box…',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ))
-                          : MarkdownView(data: answer, selectable: true),
+                      ? Text(
+                          'Reading the box…',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : MarkdownView(data: answer, selectable: true),
                 ),
               ),
             ],
@@ -921,8 +1087,9 @@ class _SidenoteDialog extends StatefulWidget {
 }
 
 class _SidenoteDialogState extends State<_SidenoteDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialText);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
   bool _aiLoading = false;
 
   @override
@@ -943,9 +1110,9 @@ class _SidenoteDialogState extends State<_SidenoteDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('AI failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('AI failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _aiLoading = false);

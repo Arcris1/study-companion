@@ -34,8 +34,8 @@ class HomeScreen extends ConsumerWidget {
           loading: () => Padding(
             padding: const EdgeInsets.all(Spacing.screenPaddingH),
             child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 240,
                 crossAxisSpacing: Spacing.listItemGap,
                 mainAxisSpacing: Spacing.listItemGap,
                 childAspectRatio: 0.9,
@@ -193,8 +193,9 @@ class HomeScreen extends ConsumerWidget {
                   ),
                   sliver: SliverGrid(
                       gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        // Responsive: ~2 columns on phones, more on tablets.
+                        maxCrossAxisExtent: 240,
                         crossAxisSpacing: Spacing.listItemGap,
                         mainAxisSpacing: Spacing.listItemGap,
                         childAspectRatio: 0.9,

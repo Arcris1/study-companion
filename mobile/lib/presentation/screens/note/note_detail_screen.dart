@@ -312,6 +312,13 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                   actions: [
                     if (_activeTab == 0)
                       IconButton(
+                        tooltip: 'Fullscreen reading',
+                        icon: const Icon(Icons.fullscreen_rounded),
+                        onPressed: () =>
+                            context.push('/note/${widget.noteId}/read'),
+                      ),
+                    if (_activeTab == 0)
+                      IconButton(
                         tooltip: hasAnnotations
                             ? 'Locked (has annotations)'
                             : 'Edit',
@@ -415,9 +422,12 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 SingleChildScrollView(
                   controller: _contentScrollController,
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                       // Status + chunk count row
                       Row(
                         children: [
@@ -476,6 +486,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                                     ),
                             ),
                     ],
+                      ),
+                    ),
                   ),
                 ),
 
@@ -502,10 +514,13 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     if (note.summary != null && note.summary!.isNotEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(Spacing.screenPaddingH),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // AI Generated badge
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // AI Generated badge
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: Spacing.sm,
@@ -535,7 +550,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
             const SizedBox(height: Spacing.md),
 
             MarkdownView(data: note.summary!),
-          ],
+              ],
+            ),
+          ),
         ),
       );
     }
