@@ -70,5 +70,11 @@
 	<string>Microphone access is used for optional voice dictation when composing a chat message.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech recognition is used to transcribe your spoken words into text for chat input.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Study Companion needs access to your photo library to attach images to your study materials.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Study Companion needs permission to save images to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Study Companion needs access to your camera to capture images for your study materials.</string>
 </dict>
 </plist>
