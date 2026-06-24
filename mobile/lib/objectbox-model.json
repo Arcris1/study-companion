@@ -597,9 +597,43 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "15:450434228047843849",
+      "lastPropertyId": "5:395825897580400365",
+      "name": "NoteAnnotationModel",
+      "properties": [
+        {
+          "id": "1:1793606875551891962",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2062825509426237305",
+          "name": "noteId",
+          "type": 6
+        },
+        {
+          "id": "3:2470032409116588621",
+          "name": "strokesJson",
+          "type": 9
+        },
+        {
+          "id": "4:6873530999209517945",
+          "name": "sidenotesJson",
+          "type": 9
+        },
+        {
+          "id": "5:395825897580400365",
+          "name": "updatedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "14:3468003717060621635",
+  "lastEntityId": "15:450434228047843849",
   "lastIndexId": "2:7564743392253910987",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../config/theme/app_colors.dart';
+import '../../../core/utils/annotate_prefs.dart';
 import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
@@ -10,6 +12,7 @@ import '../../../core/llm/llm_service.dart';
 import '../../../core/openai/openai_client.dart';
 import '../../../data/models/highlight_model.dart';
 import '../../providers/highlight_provider.dart';
+import '../../providers/note_annotation_provider.dart';
 import '../../providers/note_provider.dart';
 import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
@@ -64,6 +67,14 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() => _activeTab = _tabController.index);
+      }
+    });
+
+    // If this note was last left in annotate mode, jump straight back to it
+    // (replace so system-back from annotate returns to the notes list).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && AnnotatePrefs.instance.isAnnotate(widget.noteId)) {
+        context.pushReplacement('/note/${widget.noteId}/annotate');
       }
     });
   }
@@ -254,11 +265,25 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final noteAsync = ref.watch(_noteProvider(widget.noteId));
+    final annotation = ref.watch(noteAnnotationProvider(widget.noteId)).asData?.value;
+    final hasAnnotations = annotation != null && !annotation.isEmpty;
 
     return Scaffold(
       backgroundColor: isDark
           ? AppColors.backgroundDark
           : AppColors.backgroundLight,
+      floatingActionButton: (_activeTab == 0 && !_isEditing)
+          ? FloatingActionButton(
+              tooltip: 'Annotate — draw, highlight, sidenotes',
+              onPressed: () async {
+                await AnnotatePrefs.instance.setAnnotate(widget.noteId, true);
+                if (context.mounted) {
+                  context.pushReplacement('/note/${widget.noteId}/annotate');
+                }
+              },
+              child: const Icon(Icons.draw_rounded),
+            )
+          : null,
       body: noteAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorStateWidget(message: e.toString()),
@@ -287,10 +312,27 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                   actions: [
                     if (_activeTab == 0)
                       IconButton(
+                        tooltip: hasAnnotations
+                            ? 'Locked (has annotations)'
+                            : 'Edit',
                         icon: Icon(
-                          _isEditing ? Icons.check_rounded : Icons.edit_rounded,
+                          _isEditing
+                              ? Icons.check_rounded
+                              : (hasAnnotations
+                                  ? Icons.lock_outline_rounded
+                                  : Icons.edit_rounded),
                         ),
                         onPressed: () async {
+                          if (hasAnnotations && !_isEditing) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Editing is locked while this note has annotations. Clear them in Annotate to edit the text.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
                           if (_isEditing) {
                             // Save changes
                             final currentNote = ref

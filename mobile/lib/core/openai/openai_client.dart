@@ -44,7 +44,7 @@ class OpenAiClient {
     bool jsonMode = false,
   }) async {
     if (!hasKey) throw const LlmException('OpenAI API key not set');
-    final res = await http.post(
+    final res = await _post(
       Uri.parse('${AppConfig.openAiBaseUrl}/chat/completions'),
       headers: _headers,
       body: jsonEncode({
@@ -86,7 +86,7 @@ class OpenAiClient {
       'stream': true,
     });
 
-    final response = await http.Client().send(request);
+    final response = await _send(request);
     if (response.statusCode != 200) {
       final body = await response.stream.bytesToString();
       throw LlmException(
@@ -113,6 +113,65 @@ class OpenAiClient {
     }
   }
 
+  /// Streams a vision completion: sends [prompt] plus a PNG [imageBytes]
+  /// (e.g. a boxed region of a note) to a vision-capable chat model.
+  Stream<String> visionStream(
+    String prompt,
+    Uint8List imageBytes, {
+    int maxTokens = 700,
+  }) async* {
+    if (!hasKey) throw const LlmException('OpenAI API key not set');
+    final b64 = base64Encode(imageBytes);
+    final request = http.Request(
+      'POST',
+      Uri.parse('${AppConfig.openAiBaseUrl}/chat/completions'),
+    );
+    request.headers.addAll(_headers);
+    request.body = jsonEncode({
+      'model': AiConfig.instance.chatModel,
+      'messages': [
+        {
+          'role': 'user',
+          'content': [
+            {'type': 'text', 'text': prompt},
+            {
+              'type': 'image_url',
+              'image_url': {'url': 'data:image/png;base64,$b64'},
+            },
+          ],
+        },
+      ],
+      'max_tokens': maxTokens,
+      'stream': true,
+    });
+
+    final response = await _send(request);
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw LlmException(
+          'OpenAI vision failed (${response.statusCode}): ${_errorMessage(body)}');
+    }
+
+    await for (final line in response.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())) {
+      if (!line.startsWith('data:')) continue;
+      final payload = line.substring(5).trim();
+      if (payload.isEmpty) continue;
+      if (payload == '[DONE]') break;
+      try {
+        final json = jsonDecode(payload) as Map<String, dynamic>;
+        final choices = json['choices'] as List?;
+        if (choices == null || choices.isEmpty) continue;
+        final delta = choices.first['delta'];
+        final content = delta is Map ? delta['content'] : null;
+        if (content is String && content.isNotEmpty) yield content;
+      } catch (_) {
+        // Ignore keep-alive lines.
+      }
+    }
+  }
+
   // ─── Embeddings ─────────────────────────────────────────────────────
 
   /// Embeds [texts] into vectors of [dimensions] length. Batches requests so
@@ -130,7 +189,7 @@ class OpenAiClient {
       final end = (i + batchSize) > texts.length ? texts.length : i + batchSize;
       final batch = texts.sublist(i, end);
 
-      final res = await http.post(
+      final res = await _post(
         Uri.parse('${AppConfig.openAiBaseUrl}/embeddings'),
         headers: _headers,
         body: jsonEncode({
@@ -156,6 +215,45 @@ class OpenAiClient {
       }
     }
     return out;
+  }
+
+  Future<http.Response> _post(
+    Uri url, {
+    required Map<String, String> headers,
+    required String body,
+  }) async {
+    try {
+      return await http.post(url, headers: headers, body: body);
+    } catch (e) {
+      throw _networkError(e);
+    }
+  }
+
+  Future<http.StreamedResponse> _send(http.Request request) async {
+    try {
+      return await http.Client().send(request);
+    } catch (e) {
+      throw _networkError(e);
+    }
+  }
+
+  /// Converts low-level connection failures into a friendly, user-facing
+  /// message instead of a raw SocketException.
+  LlmException _networkError(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') ||
+        s.contains('Failed host lookup') ||
+        s.contains('No address associated') ||
+        s.contains('Network is unreachable') ||
+        s.contains('Connection refused') ||
+        s.contains('Connection reset') ||
+        s.contains('Connection closed') ||
+        s.contains('Connection timed out') ||
+        s.contains('timed out')) {
+      return const LlmException(
+          'No internet connection. Check your network and try again.');
+    }
+    return LlmException(e.toString());
   }
 
   String _errorMessage(String body) {

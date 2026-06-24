@@ -20,6 +20,7 @@ import 'data/models/flashcard_deck_model.dart';
 import 'data/models/flashcard_model.dart';
 import 'data/models/flashcard_review_model.dart';
 import 'data/models/highlight_model.dart';
+import 'data/models/note_annotation_model.dart';
 import 'data/models/note_chunk_model.dart';
 import 'data/models/note_model.dart';
 import 'data/models/notebook_model.dart';
@@ -733,6 +734,46 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(15, 450434228047843849),
+    name: 'NoteAnnotationModel',
+    lastPropertyId: const obx_int.IdUid(5, 395825897580400365),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1793606875551891962),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 2062825509426237305),
+        name: 'noteId',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2470032409116588621),
+        name: 'strokesJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6873530999209517945),
+        name: 'sidenotesJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 395825897580400365),
+        name: 'updatedAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -778,7 +819,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(14, 3468003717060621635),
+    lastEntityId: const obx_int.IdUid(15, 450434228047843849),
     lastIndexId: const obx_int.IdUid(2, 7564743392253910987),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
@@ -1775,6 +1816,61 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    NoteAnnotationModel: obx_int.EntityDefinition<NoteAnnotationModel>(
+      model: _entities[14],
+      toOneRelations: (NoteAnnotationModel object) => [],
+      toManyRelations: (NoteAnnotationModel object) => {},
+      getId: (NoteAnnotationModel object) => object.id,
+      setId: (NoteAnnotationModel object, int id) {
+        object.id = id;
+      },
+      objectToFB: (NoteAnnotationModel object, fb.Builder fbb) {
+        final strokesJsonOffset = fbb.writeString(object.strokesJson);
+        final sidenotesJsonOffset = fbb.writeString(object.sidenotesJson);
+        fbb.startTable(6);
+        fbb.addInt64(0, object.id);
+        fbb.addInt64(1, object.noteId);
+        fbb.addOffset(2, strokesJsonOffset);
+        fbb.addOffset(3, sidenotesJsonOffset);
+        fbb.addInt64(4, object.updatedAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final noteIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          6,
+          0,
+        );
+        final strokesJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final sidenotesJsonParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final updatedAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
+        );
+        final object = NoteAnnotationModel(
+          id: idParam,
+          noteId: noteIdParam,
+          strokesJson: strokesJsonParam,
+          sidenotesJson: sidenotesJsonParam,
+          updatedAt: updatedAtParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -2284,5 +2380,33 @@ class HighlightModel_ {
   /// See [HighlightModel.aiAnswer].
   static final aiAnswer = obx.QueryStringProperty<HighlightModel>(
     _entities[13].properties[6],
+  );
+}
+
+/// [NoteAnnotationModel] entity fields to define ObjectBox queries.
+class NoteAnnotationModel_ {
+  /// See [NoteAnnotationModel.id].
+  static final id = obx.QueryIntegerProperty<NoteAnnotationModel>(
+    _entities[14].properties[0],
+  );
+
+  /// See [NoteAnnotationModel.noteId].
+  static final noteId = obx.QueryIntegerProperty<NoteAnnotationModel>(
+    _entities[14].properties[1],
+  );
+
+  /// See [NoteAnnotationModel.strokesJson].
+  static final strokesJson = obx.QueryStringProperty<NoteAnnotationModel>(
+    _entities[14].properties[2],
+  );
+
+  /// See [NoteAnnotationModel.sidenotesJson].
+  static final sidenotesJson = obx.QueryStringProperty<NoteAnnotationModel>(
+    _entities[14].properties[3],
+  );
+
+  /// See [NoteAnnotationModel.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<NoteAnnotationModel>(
+    _entities[14].properties[4],
   );
 }

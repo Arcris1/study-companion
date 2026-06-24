@@ -7,6 +7,7 @@ import '../presentation/screens/notebook/notebook_detail_screen.dart';
 import '../presentation/screens/notebook/create_notebook_screen.dart';
 import '../presentation/screens/note/note_import_screen.dart';
 import '../presentation/screens/note/note_detail_screen.dart';
+import '../presentation/screens/note/note_annotate_screen.dart';
 import '../presentation/screens/chat/chat_screen.dart';
 import '../presentation/screens/quiz/quiz_config_screen.dart';
 import '../presentation/screens/quiz/quiz_screen.dart';
@@ -84,6 +85,7 @@ class AppRoutes {
   static const String notebookDetail = '/notebook/:id';
   static const String noteImport = '/notebook/:notebookId/import';
   static const String noteDetail = '/note/:id';
+  static const String noteAnnotate = '/note/:id/annotate';
   static const String chat = '/notebook/:notebookId/chat/:sessionId';
   static const String quizConfig = '/notebook/:notebookId/quiz-config';
   static const String quiz = '/quiz/:id';
@@ -179,6 +181,16 @@ GoRouter createRouter({bool showOnboarding = false}) {
           return _slideRightPage(
             key: state.pageKey,
             child: NoteDetailScreen(noteId: id),
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.noteAnnotate,
+        pageBuilder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return _slideUpPage(
+            key: state.pageKey,
+            child: NoteAnnotateScreen(noteId: id),
           );
         },
       ),
