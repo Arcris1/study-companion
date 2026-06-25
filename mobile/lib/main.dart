@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/ai/ai_config.dart';
 import 'core/utils/annotate_prefs.dart';
+import 'core/utils/view_prefs.dart';
 import 'core/database/objectbox.dart';
 import 'core/openai/api_key_store.dart';
 import 'core/openai/openai_client.dart';
@@ -13,6 +14,7 @@ void main() async {
   // Load editable AI prompts + token limits.
   await AiConfig.instance.load();
   await AnnotatePrefs.instance.load();
+  await ViewPrefs.instance.load();
 
   // Initialize ObjectBox
   final objectBox = await ObjectBox.create();

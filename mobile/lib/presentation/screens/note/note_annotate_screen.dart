@@ -10,10 +10,12 @@ import '../../../config/theme/spacing.dart';
 import '../../../core/openai/openai_client.dart';
 import '../../../core/llm/llm_service.dart';
 import '../../../core/utils/annotate_prefs.dart';
+import '../../../core/utils/view_prefs.dart';
 import '../../../data/models/note_annotation_model.dart';
 import '../../providers/note_provider.dart';
 import '../../providers/note_annotation_provider.dart';
 import '../../widgets/common/markdown_view.dart';
+import '../../widgets/common/view_scale_sheet.dart';
 
 /// Fixed page width all ink is stored in; the page is scaled to fit any screen
 /// so ink always stays aligned with the text.
@@ -108,6 +110,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   bool _fullscreen = false;
 
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _hScrollController = ScrollController();
   final GlobalKey _captureKey = GlobalKey();
   Offset _lastFocal = Offset.zero;
   bool _scrolling = false;
@@ -128,6 +131,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _hScrollController.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -220,6 +224,15 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
         _scrollController.jumpTo(
           (_scrollController.offset - delta.dy).clamp(0.0, max),
         );
+      }
+      // Horizontal pan when zoomed wider than the screen.
+      if (_hScrollController.hasClients) {
+        final hmax = _hScrollController.position.maxScrollExtent;
+        if (hmax > 0) {
+          _hScrollController.jumpTo(
+            (_hScrollController.offset - delta.dx).clamp(0.0, hmax),
+          );
+        }
       }
       return;
     }
@@ -460,6 +473,21 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
           ),
           actions: [
             IconButton(
+              tooltip: 'Page zoom',
+              icon: const Icon(Icons.zoom_in_rounded),
+              onPressed: () => showViewScaleSheet(
+                context,
+                title: 'Page zoom',
+                value: ViewPrefs.instance.annotateZoom,
+                min: ViewPrefs.minZoom,
+                max: ViewPrefs.maxZoom,
+                onChanged: (v) async {
+                  await ViewPrefs.instance.setAnnotateZoom(v);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ),
+            IconButton(
               tooltip: 'Fullscreen',
               icon: const Icon(Icons.fullscreen_rounded),
               onPressed: _toggleFullscreen,
@@ -562,20 +590,17 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
       builder: (context, constraints) {
         // Use the full screen width on tablets so the ink page fills the screen
         // (FittedBox scales the fixed-width page up — text grows proportionally).
-        final displayWidth = constraints.maxWidth;
-        return SingleChildScrollView(
-          controller: _scrollController,
-          physics:
-              const NeverScrollableScrollPhysics(), // scroll driven manually
-          child: Center(
+        final base = constraints.maxWidth;
+        final displayWidth = base * ViewPrefs.instance.annotateZoom;
+        final needsH = displayWidth > base + 0.5;
+        final page = SizedBox(
+          width: displayWidth,
+          child: FittedBox(
+            fit: BoxFit.fitWidth,
+            alignment: Alignment.topCenter,
             child: SizedBox(
-              width: displayWidth,
-              child: FittedBox(
-                fit: BoxFit.fitWidth,
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: _kPageWidth,
-                  child: Stack(
+              width: _kPageWidth,
+              child: Stack(
                     children: [
                       // Capturable layer: content + ink (used by Box-AI).
                       RepaintBoundary(
@@ -664,8 +689,19 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+
+        return SingleChildScrollView(
+          controller: _scrollController,
+          physics: const NeverScrollableScrollPhysics(),
+          child: needsH
+              ? SingleChildScrollView(
+                  controller: _hScrollController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: page,
+                )
+              : Center(child: page),
         );
       },
     );

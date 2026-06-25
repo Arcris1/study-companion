@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../core/utils/annotate_prefs.dart';
+import '../../../core/utils/view_prefs.dart';
 import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
@@ -18,6 +19,7 @@ import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/error_state_widget.dart';
 import '../../widgets/common/markdown_view.dart';
 import '../../widgets/common/sc_button.dart';
+import '../../widgets/common/view_scale_sheet.dart';
 import '../../widgets/note/processing_indicator.dart';
 
 /// Palette for highlight color tags (ARGB ints, stored directly on the model).
@@ -312,6 +314,22 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                   actions: [
                     if (_activeTab == 0)
                       IconButton(
+                        tooltip: 'Text size',
+                        icon: const Icon(Icons.format_size_rounded),
+                        onPressed: () => showViewScaleSheet(
+                          context,
+                          title: 'Text size',
+                          value: ViewPrefs.instance.readScale,
+                          min: ViewPrefs.minRead,
+                          max: ViewPrefs.maxRead,
+                          onChanged: (v) async {
+                            await ViewPrefs.instance.setReadScale(v);
+                            if (mounted) setState(() {});
+                          },
+                        ),
+                      ),
+                    if (_activeTab == 0)
+                      IconButton(
                         tooltip: 'Fullscreen reading',
                         icon: const Icon(Icons.fullscreen_rounded),
                         onPressed: () =>
@@ -422,12 +440,17 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 SingleChildScrollView(
                   controller: _contentScrollController,
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 760),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      textScaler:
+                          TextScaler.linear(ViewPrefs.instance.readScale),
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                       // Status + chunk count row
                       Row(
                         children: [
@@ -487,6 +510,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                             ),
                     ],
                       ),
+                    ),
                     ),
                   ),
                 ),

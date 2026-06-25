@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/theme/app_colors.dart';
+import '../../../core/utils/view_prefs.dart';
 import '../../providers/note_provider.dart';
 import '../../widgets/common/markdown_view.dart';
+import '../../widgets/common/view_scale_sheet.dart';
 
 /// Distraction-free, immersive fullscreen reader for a note (rendered Markdown
 /// for `.md`, plain selectable text for `.txt`). Hides the system bars; tap to
@@ -72,12 +74,17 @@ class _FullscreenReaderScreenState
                       24,
                       MediaQuery.of(context).padding.bottom + 56,
                     ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: _sourceType == 'md'
-                            ? MarkdownView(data: _rawText, selectable: true)
-                            : SelectableText(
+                    child: MediaQuery(
+                      data: MediaQuery.of(context).copyWith(
+                        textScaler:
+                            TextScaler.linear(ViewPrefs.instance.readScale),
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 760),
+                          child: _sourceType == 'md'
+                              ? MarkdownView(data: _rawText, selectable: true)
+                              : SelectableText(
                                 _rawText,
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   height: 1.8,
@@ -87,6 +94,7 @@ class _FullscreenReaderScreenState
                                 ),
                               ),
                       ),
+                    ),
                     ),
                   ),
                 ),
@@ -117,6 +125,30 @@ class _FullscreenReaderScreenState
                 ),
 
                 // Always-present close button
+                Positioned(
+                  top: topInset + 8,
+                  right: 60,
+                  child: Material(
+                    color: (isDark ? Colors.black : Colors.white)
+                        .withValues(alpha: 0.55),
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      tooltip: 'Text size',
+                      icon: const Icon(Icons.format_size_rounded),
+                      onPressed: () => showViewScaleSheet(
+                        context,
+                        title: 'Text size',
+                        value: ViewPrefs.instance.readScale,
+                        min: ViewPrefs.minRead,
+                        max: ViewPrefs.maxRead,
+                        onChanged: (v) async {
+                          await ViewPrefs.instance.setReadScale(v);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                    ),
+                  ),
+                ),
                 Positioned(
                   top: topInset + 8,
                   right: 12,
