@@ -238,6 +238,9 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       _currentPage = page;
       _loadInkForPage(page);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    });
   }
 
   Future<void> _save() async {
@@ -771,16 +774,20 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                             child: CustomPaint(painter: _BoxPainter(_boxRect!)),
                           ),
                         ),
-                      // Gesture capture
+                      // Gesture capture — disabled for the Move tool so the
+                      // ScrollView below handles scrolling natively.
                       Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onScaleStart: _onScaleStart,
-                          onScaleUpdate: _onScaleUpdate,
-                          onScaleEnd: _onScaleEnd,
-                          onTapUp: _tool == _Tool.sidenote
-                              ? (d) => _addSidenoteAt(d.localPosition)
-                              : null,
+                        child: IgnorePointer(
+                          ignoring: _tool == _Tool.move,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
+                            onTapUp: _tool == _Tool.sidenote
+                                ? (d) => _addSidenoteAt(d.localPosition)
+                                : null,
+                          ),
                         ),
                       ),
                       // Sidenote markers (above gesture so they stay tappable)
@@ -816,14 +823,20 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
               ),
             );
 
+        // With the Move tool, scroll natively (smooth + fling). With drawing
+        // tools the gesture layer captures one finger and we scroll manually
+        // (two-finger) instead, so the page stays still while drawing.
+        final ScrollPhysics physics = _tool == _Tool.move
+            ? const BouncingScrollPhysics()
+            : const NeverScrollableScrollPhysics();
         return SingleChildScrollView(
           controller: _scrollController,
-          physics: const NeverScrollableScrollPhysics(),
+          physics: physics,
           child: needsH
               ? SingleChildScrollView(
                   controller: _hScrollController,
                   scrollDirection: Axis.horizontal,
-                  physics: const NeverScrollableScrollPhysics(),
+                  physics: physics,
                   child: page,
                 )
               : Center(child: page),

@@ -3,6 +3,13 @@
 All notable changes to StudyCompanion.
 Format: [version] — date — change.
 
+## [1.3.1] — 2026-06-28
+
+### Fix — PDF/index UI issues
+- The AI-index banner no longer overlaps the status bar — it now sits below the app bar (as a header sliver).
+- PDF inline preview scrolls smoothly: rendered as a `ListView` of page images instead of the nested PdfViewer (which fought the outer scroll). Pinch-zoom remains in the fullscreen reader.
+- Annotate page now scrolls natively (smooth + fling) when the **Move** tool is active; drawing tools still capture one finger and scroll on two.
+
 ## [1.3.0] — 2026-06-27
 
 ### Feature — Page citations + scanned-PDF OCR

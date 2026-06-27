@@ -296,12 +296,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
             return const Center(child: Text('Note not found'));
           }
 
-          return Column(
-            children: [
-              _AiIndexBanner(
-                  noteId: widget.noteId, isPdf: note.sourceType == 'pdf'),
-              Expanded(
-                child: NestedScrollView(
+          return NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 // ── Sticky header ─────────────────────────────────────
@@ -438,6 +433,12 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                     ),
                   ),
                 ),
+                SliverToBoxAdapter(
+                  child: _AiIndexBanner(
+                    noteId: widget.noteId,
+                    isPdf: note.sourceType == 'pdf',
+                  ),
+                ),
               ];
             },
             body: TabBarView(
@@ -531,9 +532,6 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 _buildHighlightsTab(theme, isDark, note.id),
               ],
             ),
-                ),
-              ),
-            ],
           );
         },
       ),
@@ -1072,17 +1070,36 @@ class _AiIndexBannerState extends ConsumerState<_AiIndexBanner> {
   }
 }
 
-// Inline rendered PDF for the Content tab (pdfrx handles scroll + zoom).
+// Inline rendered PDF for the Content tab. Rendered as a normal ListView of
+// page images so it scrolls smoothly inside the NestedScrollView (the full
+// PdfViewer's own scroll fights the outer scroll). Pinch-zoom is available in
+// the fullscreen reader.
 class _PdfContent extends StatelessWidget {
   final String? path;
   const _PdfContent({this.path});
 
   @override
   Widget build(BuildContext context) {
-    if (path == null || !File(path!).existsSync()) {
+    final p = path;
+    if (p == null || !File(p).existsSync()) {
       return const Center(child: Text('PDF file unavailable'));
     }
-    return PdfViewer.file(path!);
+    return PdfDocumentViewBuilder.file(
+      p,
+      builder: (context, document) {
+        if (document == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: document.pages.length,
+          itemBuilder: (context, index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: PdfPageView(document: document, pageNumber: index + 1),
+          ),
+        );
+      },
+    );
   }
 }
 
