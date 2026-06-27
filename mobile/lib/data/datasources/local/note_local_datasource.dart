@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:objectbox/objectbox.dart';
@@ -6,6 +7,7 @@ import '../../../objectbox.g.dart';
 import '../../models/note_model.dart';
 import '../../models/note_chunk_model.dart';
 import '../../models/highlight_model.dart';
+import '../../models/note_annotation_model.dart';
 
 class NoteLocalDatasource {
   final ObjectBox _objectBox;
@@ -16,6 +18,8 @@ class NoteLocalDatasource {
   Box<NoteChunkModel> get _chunkBox => _objectBox.store.box<NoteChunkModel>();
   Box<HighlightModel> get _highlightBox =>
       _objectBox.store.box<HighlightModel>();
+  Box<NoteAnnotationModel> get _annotationBox =>
+      _objectBox.store.box<NoteAnnotationModel>();
 
   List<NoteModel> getByNotebookId(int notebookId) {
     final query = _box.query(NoteModel_.notebookId.equals(notebookId))
@@ -54,11 +58,50 @@ class NoteLocalDatasource {
     highlightQuery.close();
     _highlightBox.removeMany(highlightIds);
 
+    // Delete associated annotations (ink/sidenotes, possibly per-page).
+    final annQuery =
+        _annotationBox.query(NoteAnnotationModel_.noteId.equals(id)).build();
+    final annIds = annQuery.find().map((a) => a.id).toList();
+    annQuery.close();
+    _annotationBox.removeMany(annIds);
+
+    // Delete the copied PDF file (if this was a PDF import) so it isn't orphaned.
+    final note = _box.get(id);
+    final path = note?.sourcePath;
+    if (note?.sourceType == 'pdf' && path != null) {
+      try {
+        final f = File(path);
+        if (f.existsSync()) f.deleteSync();
+      } catch (_) {}
+    }
+
     _box.remove(id);
   }
 
   void saveChunks(List<NoteChunkModel> chunks) {
     _chunkBox.putMany(chunks);
+  }
+
+  void deleteChunks(int noteId) {
+    final q = _chunkBox.query(NoteChunkModel_.noteId.equals(noteId)).build();
+    final ids = q.find().map((c) => c.id).toList();
+    q.close();
+    _chunkBox.removeMany(ids);
+  }
+
+  /// (total chunks, embedded chunks) for a note — used to show AI-index state.
+  ({int total, int embedded}) indexCounts(int noteId) {
+    final totalQ =
+        _chunkBox.query(NoteChunkModel_.noteId.equals(noteId)).build();
+    final total = totalQ.count();
+    totalQ.close();
+    final embQ = _chunkBox
+        .query(NoteChunkModel_.noteId.equals(noteId) &
+            NoteChunkModel_.embedding.notNull())
+        .build();
+    final embedded = embQ.count();
+    embQ.close();
+    return (total: total, embedded: embedded);
   }
 
   List<NoteChunkModel> getChunks(int noteId) {

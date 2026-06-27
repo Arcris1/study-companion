@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdfrx/pdfrx.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../core/utils/view_prefs.dart';
 import '../../providers/note_provider.dart';
@@ -25,6 +27,7 @@ class _FullscreenReaderScreenState
   String _title = '';
   String _rawText = '';
   String _sourceType = 'md';
+  String? _sourcePath;
   bool _barVisible = false;
 
   @override
@@ -47,8 +50,17 @@ class _FullscreenReaderScreenState
       _title = note?.title ?? '';
       _rawText = note?.rawText ?? '';
       _sourceType = note?.sourceType ?? 'md';
+      _sourcePath = note?.sourcePath;
       _loaded = true;
     });
+  }
+
+  Widget _pdfBody() {
+    final path = _sourcePath;
+    if (path == null || !File(path).existsSync()) {
+      return const Center(child: Text('PDF file unavailable'));
+    }
+    return PdfViewer.file(path);
   }
 
   @override
@@ -64,7 +76,10 @@ class _FullscreenReaderScreenState
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
-                GestureDetector(
+                if (_sourceType == 'pdf')
+                  _pdfBody()
+                else
+                  GestureDetector(
                   onTap: () => setState(() => _barVisible = !_barVisible),
                   behavior: HitTestBehavior.opaque,
                   child: SingleChildScrollView(
@@ -124,8 +139,9 @@ class _FullscreenReaderScreenState
                   ),
                 ),
 
-                // Always-present close button
-                Positioned(
+                // Text-size button (not for PDF — pdfrx has its own zoom)
+                if (_sourceType != 'pdf')
+                  Positioned(
                   top: topInset + 8,
                   right: 60,
                   child: Material(

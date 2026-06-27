@@ -83,7 +83,7 @@
     },
     {
       "id": "3:9032768762954709459",
-      "lastPropertyId": "5:1236417375188136629",
+      "lastPropertyId": "6:6370714809351869943",
       "name": "NoteChunkModel",
       "properties": [
         {
@@ -115,6 +115,11 @@
           "indexId": "2:7564743392253910987",
           "type": 28,
           "flags": 8
+        },
+        {
+          "id": "6:6370714809351869943",
+          "name": "page",
+          "type": 6
         }
       ],
       "relations": []
@@ -600,7 +605,7 @@
     },
     {
       "id": "15:450434228047843849",
-      "lastPropertyId": "5:395825897580400365",
+      "lastPropertyId": "7:1869484911726393675",
       "name": "NoteAnnotationModel",
       "properties": [
         {
@@ -628,6 +633,16 @@
           "id": "5:395825897580400365",
           "name": "updatedAt",
           "type": 10
+        },
+        {
+          "id": "6:5817447588019143853",
+          "name": "pageWidth",
+          "type": 8
+        },
+        {
+          "id": "7:1869484911726393675",
+          "name": "page",
+          "type": 6
         }
       ],
       "relations": []

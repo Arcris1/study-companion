@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdfrx/pdfrx.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../core/utils/annotate_prefs.dart';
 import '../../../core/utils/view_prefs.dart';
@@ -294,7 +296,12 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
             return const Center(child: Text('Note not found'));
           }
 
-          return NestedScrollView(
+          return Column(
+            children: [
+              _AiIndexBanner(
+                  noteId: widget.noteId, isPdf: note.sourceType == 'pdf'),
+              Expanded(
+                child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 // ── Sticky header ─────────────────────────────────────
@@ -312,7 +319,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                     overflow: TextOverflow.ellipsis,
                   ),
                   actions: [
-                    if (_activeTab == 0)
+                    if (_activeTab == 0 && note.sourceType != 'pdf')
                       IconButton(
                         tooltip: 'Text size',
                         icon: const Icon(Icons.format_size_rounded),
@@ -335,7 +342,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                         onPressed: () =>
                             context.push('/note/${widget.noteId}/read'),
                       ),
-                    if (_activeTab == 0)
+                    if (_activeTab == 0 && note.sourceType != 'pdf')
                       IconButton(
                         tooltip: hasAnnotations
                             ? 'Locked (has annotations)'
@@ -437,7 +444,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
               controller: _tabController,
               children: [
                 // ── Content tab ─────────────────────────────────────
-                SingleChildScrollView(
+                note.sourceType == 'pdf'
+                    ? _PdfContent(path: note.sourcePath)
+                    : SingleChildScrollView(
                   controller: _contentScrollController,
                   padding: const EdgeInsets.all(Spacing.screenPaddingH),
                   child: MediaQuery(
@@ -522,6 +531,9 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 _buildHighlightsTab(theme, isDark, note.id),
               ],
             ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -922,6 +934,157 @@ class _PulsingTextState extends State<_PulsingText>
 }
 
 // ─── Ask-AI-about-selection bottom sheet ─────────────────────────────────────
+
+// Banner that lets the user build the AI (RAG) index on demand. Hidden once
+// the note is indexed or has no text. Indexing is never done at import time.
+class _AiIndexBanner extends ConsumerStatefulWidget {
+  final int noteId;
+  final bool isPdf;
+  const _AiIndexBanner({required this.noteId, this.isPdf = false});
+
+  @override
+  ConsumerState<_AiIndexBanner> createState() => _AiIndexBannerState();
+}
+
+class _AiIndexBannerState extends ConsumerState<_AiIndexBanner> {
+  bool _indexing = false;
+  bool _ocring = false;
+  int _done = 0;
+  int _total = 0;
+
+  Future<void> _run(Future<void> Function(void Function(int, int)) op,
+      {required bool ocr}) async {
+    setState(() {
+      _indexing = !ocr;
+      _ocring = ocr;
+      _done = 0;
+      _total = 0;
+    });
+    try {
+      await op((d, t) {
+        if (mounted) {
+          setState(() {
+            _done = d;
+            _total = t;
+          });
+        }
+      });
+      ref.invalidate(noteIndexProvider(widget.noteId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _indexing = false;
+          _ocring = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stateAsync = ref.watch(noteIndexProvider(widget.noteId));
+    return stateAsync.maybeWhen(
+      data: (s) {
+        if (_ocring) {
+          return _bar(theme,
+              progress: true,
+              text: _total > 0
+                  ? 'Extracting text (OCR)… $_done / $_total'
+                  : 'Extracting text (OCR)…');
+        }
+        if (_indexing) {
+          return _bar(theme,
+              progress: true,
+              text: _total > 0
+                  ? 'Building AI index… $_done / $_total'
+                  : 'Building AI index…');
+        }
+        if (s.total == 0) {
+          if (widget.isPdf) {
+            return _bar(theme,
+                icon: Icons.document_scanner_rounded,
+                text: 'Scanned PDF — no selectable text',
+                action: 'Extract text (OCR)',
+                onAction: () => _run(
+                    (p) => ref
+                        .read(noteRepositoryProvider)
+                        .ocrNote(widget.noteId, onProgress: p),
+                    ocr: true));
+          }
+          return const SizedBox.shrink();
+        }
+        if (s.embedded == 0) {
+          return _bar(theme,
+              icon: Icons.auto_awesome_rounded,
+              text: 'Not indexed — build the AI index to chat about this note',
+              action: 'Build AI Index',
+              onAction: () => _run(
+                  (p) => ref
+                      .read(noteRepositoryProvider)
+                      .indexNote(widget.noteId, onProgress: p),
+                  ocr: false));
+        }
+        return const SizedBox.shrink();
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _bar(ThemeData theme,
+      {bool progress = false,
+      IconData? icon,
+      required String text,
+      String? action,
+      VoidCallback? onAction}) {
+    final fg = theme.colorScheme.onPrimaryContainer;
+    return Material(
+      color: theme.colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md, vertical: Spacing.sm),
+        child: Row(
+          children: [
+            if (progress)
+              const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+            else if (icon != null)
+              Icon(icon, size: 18, color: fg),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text(text,
+                  style: theme.textTheme.bodySmall?.copyWith(color: fg)),
+            ),
+            if (action != null)
+              TextButton(onPressed: onAction, child: Text(action)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Inline rendered PDF for the Content tab (pdfrx handles scroll + zoom).
+class _PdfContent extends StatelessWidget {
+  final String? path;
+  const _PdfContent({this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    if (path == null || !File(path!).existsSync()) {
+      return const Center(child: Text('PDF file unavailable'));
+    }
+    return PdfViewer.file(path!);
+  }
+}
 
 class _AskAiSheet extends ConsumerStatefulWidget {
   final String selection;

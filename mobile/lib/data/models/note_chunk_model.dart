@@ -14,6 +14,9 @@ class NoteChunkModel {
 
   int chunkIndex;
 
+  /// 1-based source page (for PDFs); 0 for non-paged sources.
+  int page;
+
   @HnswIndex(dimensions: 384)
   Float32List? embedding;
 
@@ -22,6 +25,7 @@ class NoteChunkModel {
     required this.noteId,
     required this.text,
     required this.chunkIndex,
+    this.page = 0,
     this.embedding,
   });
 

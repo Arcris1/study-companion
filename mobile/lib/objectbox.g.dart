@@ -128,7 +128,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(3, 9032768762954709459),
     name: 'NoteChunkModel',
-    lastPropertyId: const obx_int.IdUid(5, 1236417375188136629),
+    lastPropertyId: const obx_int.IdUid(6, 6370714809351869943),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -163,6 +163,12 @@ final _entities = <obx_int.ModelEntity>[
         flags: 8,
         indexId: const obx_int.IdUid(2, 7564743392253910987),
         hnswParams: obx_int.ModelHnswParams(dimensions: 384),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 6370714809351869943),
+        name: 'page',
+        type: 6,
+        flags: 0,
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -737,7 +743,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(15, 450434228047843849),
     name: 'NoteAnnotationModel',
-    lastPropertyId: const obx_int.IdUid(5, 395825897580400365),
+    lastPropertyId: const obx_int.IdUid(7, 1869484911726393675),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -768,6 +774,18 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(5, 395825897580400365),
         name: 'updatedAt',
         type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 5817447588019143853),
+        name: 'pageWidth',
+        type: 8,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 1869484911726393675),
+        name: 'page',
+        type: 6,
         flags: 0,
       ),
     ],
@@ -981,12 +999,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final embeddingOffset = object.embedding == null
             ? null
             : fbb.writeListFloat32(object.embedding!);
-        fbb.startTable(6);
+        fbb.startTable(7);
         fbb.addInt64(0, object.id);
         fbb.addInt64(1, object.noteId);
         fbb.addOffset(2, textOffset);
         fbb.addInt64(3, object.chunkIndex);
         fbb.addOffset(4, embeddingOffset);
+        fbb.addInt64(5, object.page);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1014,6 +1033,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           10,
           0,
         );
+        final pageParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
         final embeddingParam = const obx_int.Float32ListReader()
             .vTableGetNullable(buffer, rootOffset, 12);
         final object = NoteChunkModel(
@@ -1021,6 +1046,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           noteId: noteIdParam,
           text: textParam,
           chunkIndex: chunkIndexParam,
+          page: pageParam,
           embedding: embeddingParam,
         );
 
@@ -1827,12 +1853,14 @@ obx_int.ModelDefinition getObjectBoxModel() {
       objectToFB: (NoteAnnotationModel object, fb.Builder fbb) {
         final strokesJsonOffset = fbb.writeString(object.strokesJson);
         final sidenotesJsonOffset = fbb.writeString(object.sidenotesJson);
-        fbb.startTable(6);
+        fbb.startTable(8);
         fbb.addInt64(0, object.id);
         fbb.addInt64(1, object.noteId);
         fbb.addOffset(2, strokesJsonOffset);
         fbb.addOffset(3, sidenotesJsonOffset);
         fbb.addInt64(4, object.updatedAt.millisecondsSinceEpoch);
+        fbb.addFloat64(5, object.pageWidth);
+        fbb.addInt64(6, object.page);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -1851,20 +1879,34 @@ obx_int.ModelDefinition getObjectBoxModel() {
           6,
           0,
         );
+        final pageParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          16,
+          0,
+        );
         final strokesJsonParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 8, '');
         final sidenotesJsonParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 10, '');
+        final pageWidthParam = const fb.Float64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
         final updatedAtParam = DateTime.fromMillisecondsSinceEpoch(
           const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
         );
         final object = NoteAnnotationModel(
           id: idParam,
           noteId: noteIdParam,
+          page: pageParam,
           strokesJson: strokesJsonParam,
           sidenotesJson: sidenotesJsonParam,
+          pageWidth: pageWidthParam,
           updatedAt: updatedAtParam,
         );
 
@@ -1967,6 +2009,11 @@ class NoteChunkModel_ {
   /// See [NoteChunkModel.embedding].
   static final embedding = obx.QueryHnswProperty<NoteChunkModel>(
     _entities[2].properties[4],
+  );
+
+  /// See [NoteChunkModel.page].
+  static final page = obx.QueryIntegerProperty<NoteChunkModel>(
+    _entities[2].properties[5],
   );
 }
 
@@ -2408,5 +2455,15 @@ class NoteAnnotationModel_ {
   /// See [NoteAnnotationModel.updatedAt].
   static final updatedAt = obx.QueryDateProperty<NoteAnnotationModel>(
     _entities[14].properties[4],
+  );
+
+  /// See [NoteAnnotationModel.pageWidth].
+  static final pageWidth = obx.QueryDoubleProperty<NoteAnnotationModel>(
+    _entities[14].properties[5],
+  );
+
+  /// See [NoteAnnotationModel.page].
+  static final page = obx.QueryIntegerProperty<NoteAnnotationModel>(
+    _entities[14].properties[6],
   );
 }

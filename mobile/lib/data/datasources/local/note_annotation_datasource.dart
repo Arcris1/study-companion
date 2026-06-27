@@ -18,6 +18,26 @@ class NoteAnnotationDatasource {
     return result;
   }
 
+  /// Annotation for a specific PDF page (page 0 = non-PDF single page).
+  NoteAnnotationModel? getByNoteAndPage(int noteId, int page) {
+    final query = _box
+        .query(NoteAnnotationModel_.noteId.equals(noteId) &
+            NoteAnnotationModel_.page.equals(page))
+        .build();
+    final result = query.findFirst();
+    query.close();
+    return result;
+  }
+
+  /// Whether the note has any annotations (any page).
+  bool hasAny(int noteId) {
+    final query =
+        _box.query(NoteAnnotationModel_.noteId.equals(noteId)).build();
+    final n = query.count();
+    query.close();
+    return n > 0;
+  }
+
   NoteAnnotationModel save(NoteAnnotationModel model) {
     final id = _box.put(model);
     return _box.get(id)!;

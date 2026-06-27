@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pdfrx/pdfrx.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../config/theme/spacing.dart';
 import '../../../core/openai/openai_client.dart';
@@ -102,6 +104,18 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   final List<_Sidenote> _sidenotes = [];
   _Stroke? _current;
 
+  /// Logical width the content/ink is laid out at. 0 until first layout; set to
+  /// the available width for new notes (so text renders natural-sized like the
+  /// md preview), or kept from a saved annotation for alignment.
+  double _pageWidth = 0;
+
+  // PDF state (per-page annotation).
+  bool _isPdf = false;
+  PdfDocument? _pdfDoc;
+  int _pageCount = 1;
+  int _currentPage = 1;
+  double _pdfAspect = 1.414; // height / width of the current page
+
   _Tool _tool = _Tool.move;
   int _colorIndex = 5; // ink
   double _penWidth = 4;
@@ -132,6 +146,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   void dispose() {
     _scrollController.dispose();
     _hScrollController.dispose();
+    _pdfDoc?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -145,17 +160,42 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   Future<void> _load() async {
     final note = await ref.read(noteRepositoryProvider).getById(widget.noteId);
-    final ann = ref
-        .read(noteAnnotationDatasourceProvider)
-        .getByNoteId(widget.noteId);
-    if (ann != null) {
-      for (final s in (jsonDecode(ann.strokesJson) as List)) {
-        _strokes.add(_Stroke.fromJson(s as Map<String, dynamic>));
-      }
-      for (final s in (jsonDecode(ann.sidenotesJson) as List)) {
-        _sidenotes.add(_Sidenote.fromJson(s as Map<String, dynamic>));
+    final pdfPath = note?.sourcePath;
+    final isPdf = note?.sourceType == 'pdf' &&
+        pdfPath != null &&
+        File(pdfPath).existsSync();
+
+    if (isPdf) {
+      try {
+        await pdfrxFlutterInitialize();
+        _pdfDoc = await PdfDocument.openFile(pdfPath);
+        _pageCount = _pdfDoc!.pages.length;
+        _isPdf = true;
+        _currentPage = 1;
+        _loadInkForPage(1);
+      } catch (_) {
+        _isPdf = false;
       }
     }
+
+    if (!_isPdf) {
+      final ann = ref
+          .read(noteAnnotationDatasourceProvider)
+          .getByNoteAndPage(widget.noteId, 0);
+      if (ann != null) {
+        for (final s in (jsonDecode(ann.strokesJson) as List)) {
+          _strokes.add(_Stroke.fromJson(s as Map<String, dynamic>));
+        }
+        for (final s in (jsonDecode(ann.sidenotesJson) as List)) {
+          _sidenotes.add(_Sidenote.fromJson(s as Map<String, dynamic>));
+        }
+        _pageWidth = ann.pageWidth;
+      }
+      if (_pageWidth == 0 && (_strokes.isNotEmpty || _sidenotes.isNotEmpty)) {
+        _pageWidth = _kPageWidth; // legacy ink drawn in the old fixed space
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _title = note?.title ?? 'Annotate';
@@ -165,15 +205,54 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     });
   }
 
+  /// Loads the saved ink for a PDF [page] (1-based) and updates the page aspect.
+  void _loadInkForPage(int page) {
+    _strokes.clear();
+    _sidenotes.clear();
+    final ann = ref
+        .read(noteAnnotationDatasourceProvider)
+        .getByNoteAndPage(widget.noteId, page);
+    if (ann != null) {
+      for (final s in (jsonDecode(ann.strokesJson) as List)) {
+        _strokes.add(_Stroke.fromJson(s as Map<String, dynamic>));
+      }
+      for (final s in (jsonDecode(ann.sidenotesJson) as List)) {
+        _sidenotes.add(_Sidenote.fromJson(s as Map<String, dynamic>));
+      }
+      if (ann.pageWidth > 0) _pageWidth = ann.pageWidth;
+    }
+    final doc = _pdfDoc;
+    if (doc != null && page >= 1 && page <= doc.pages.length) {
+      final p = doc.pages[page - 1];
+      _pdfAspect = p.height / p.width;
+    }
+  }
+
+  Future<void> _goToPage(int page) async {
+    if (page < 1 || page > _pageCount || page == _currentPage) return;
+    if (_dirty) await _save();
+    if (!mounted) return;
+    setState(() {
+      _current = null;
+      _boxRect = null;
+      _currentPage = page;
+      _loadInkForPage(page);
+    });
+  }
+
   Future<void> _save() async {
-    final model =
-        ref.read(noteAnnotationDatasourceProvider).getByNoteId(widget.noteId) ??
-        NoteAnnotationModel(noteId: widget.noteId, updatedAt: DateTime.now());
+    final ds = ref.read(noteAnnotationDatasourceProvider);
+    final page = _isPdf ? _currentPage : 0;
+    final model = ds.getByNoteAndPage(widget.noteId, page) ??
+        NoteAnnotationModel(
+            noteId: widget.noteId, page: page, updatedAt: DateTime.now());
     model
+      ..page = page
       ..strokesJson = jsonEncode(_strokes.map((s) => s.toJson()).toList())
       ..sidenotesJson = jsonEncode(_sidenotes.map((s) => s.toJson()).toList())
+      ..pageWidth = _pageWidth
       ..updatedAt = DateTime.now();
-    ref.read(noteAnnotationDatasourceProvider).save(model);
+    ds.save(model);
     ref.invalidate(noteAnnotationProvider(widget.noteId));
     _dirty = false;
   }
@@ -523,6 +602,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                     children: [
                       Expanded(child: _buildPage(theme)),
                       if (boxReady) _buildBoxBar(theme),
+                      if (_isPdf) _buildPageNav(theme),
                       _buildToolbar(theme),
                     ],
                   ),
@@ -583,6 +663,39 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
     );
   }
 
+  Widget _buildPageNav(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Material(
+      color: isDark
+          ? AppColors.surfaceContainerDark
+          : AppColors.surfaceContainerLight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md, vertical: Spacing.xs),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              tooltip: 'Previous page',
+              onPressed:
+                  _currentPage > 1 ? () => _goToPage(_currentPage - 1) : null,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            Text('Page $_currentPage of $_pageCount',
+                style: theme.textTheme.labelLarge),
+            IconButton(
+              tooltip: 'Next page',
+              onPressed: _currentPage < _pageCount
+                  ? () => _goToPage(_currentPage + 1)
+                  : null,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildPage(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
@@ -591,6 +704,9 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         // Use the full screen width on tablets so the ink page fills the screen
         // (FittedBox scales the fixed-width page up — text grows proportionally).
         final base = constraints.maxWidth;
+        // First time on a fresh note: lay the page out at the real width so the
+        // content reads natural-sized (like the md preview), not magnified.
+        if (_pageWidth == 0) _pageWidth = base;
         final displayWidth = base * ViewPrefs.instance.annotateZoom;
         final needsH = displayWidth > base + 0.5;
         final page = SizedBox(
@@ -599,7 +715,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
             fit: BoxFit.fitWidth,
             alignment: Alignment.topCenter,
             child: SizedBox(
-              width: _kPageWidth,
+              width: _pageWidth,
               child: Stack(
                     children: [
                       // Capturable layer: content + ink (used by Box-AI).
@@ -607,8 +723,17 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                         key: _captureKey,
                         child: Stack(
                           children: [
-                            Container(
-                              width: _kPageWidth,
+                            _isPdf
+                                ? SizedBox(
+                                    width: _pageWidth,
+                                    height: _pageWidth * _pdfAspect,
+                                    child: PdfPageView(
+                                      document: _pdfDoc!,
+                                      pageNumber: _currentPage,
+                                    ),
+                                  )
+                                : Container(
+                              width: _pageWidth,
                               color: isDark
                                   ? const Color(0xFF15151E)
                                   : Colors.white,

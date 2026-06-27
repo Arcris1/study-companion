@@ -113,7 +113,14 @@ class ChatRepository implements IChatRepository {
     }
 
     // Build readable sources: one entry per cited note, stored as
-    // "<note title>\n<snippet>" (the bubble shows the title, expands to snippet).
+    // "<note title> · p.X, Y\n<snippet>" (the bubble shows the title line and
+    // expands to the snippet). Page numbers come from PDF chunks (page > 0).
+    final pagesByNote = <int, Set<int>>{};
+    for (final chunk in relevantChunks) {
+      if (chunk.page > 0) {
+        (pagesByNote[chunk.noteId] ??= <int>{}).add(chunk.page);
+      }
+    }
     final sources = <String>[];
     final seenNotes = <int>{};
     for (final chunk in relevantChunks) {
@@ -122,11 +129,16 @@ class ChatRepository implements IChatRepository {
       final title = (note != null && note.title.trim().isNotEmpty)
           ? note.title.trim()
           : 'Untitled note';
+      final pages = (pagesByNote[chunk.noteId] ?? const <int>{}).toList()
+        ..sort();
+      final pageStr = pages.isEmpty
+          ? ''
+          : ' · p.${pages.take(6).join(', ')}${pages.length > 6 ? '…' : ''}';
       final snippet = chunk.text.replaceAll(RegExp(r'\s+'), ' ').trim();
       final shortSnippet = snippet.length > 180
           ? '${snippet.substring(0, 180).trim()}…'
           : snippet;
-      sources.add('$title\n$shortSnippet');
+      sources.add('$title$pageStr\n$shortSnippet');
     }
 
     final historyStr = _buildHistory(recentMessages, maxMessages: 10);

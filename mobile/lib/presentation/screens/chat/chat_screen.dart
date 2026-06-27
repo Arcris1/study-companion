@@ -8,6 +8,7 @@ import '../../../config/theme/shadows.dart';
 import '../../../config/theme/animations.dart';
 import '../../../config/theme/gradients.dart';
 import '../../providers/chat_provider.dart';
+import '../../providers/note_provider.dart';
 import '../../widgets/chat/chat_bubble.dart';
 import '../../widgets/chat/typing_indicator.dart';
 
@@ -171,6 +172,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
           Column(
             children: [
+              _ChatIndexBanner(notebookId: widget.notebookId),
               Expanded(
                 child: chatState.messages.isEmpty && !chatState.isGenerating
                     ? _buildEmptyState(theme)
@@ -577,6 +579,115 @@ class _SuggestionChip extends StatelessWidget {
 }
 
 /// Paints a subtle radial gradient at the top for the chat background.
+// Prompts the user to index unindexed notes so chat can use semantic search.
+// Hidden when all notes (with text) are indexed. Chat still works via keyword
+// search when not indexed — this only improves answer quality.
+class _ChatIndexBanner extends ConsumerStatefulWidget {
+  final int notebookId;
+  const _ChatIndexBanner({required this.notebookId});
+
+  @override
+  ConsumerState<_ChatIndexBanner> createState() => _ChatIndexBannerState();
+}
+
+class _ChatIndexBannerState extends ConsumerState<_ChatIndexBanner> {
+  bool _indexing = false;
+  int _done = 0;
+  int _total = 0;
+
+  Future<void> _indexAll() async {
+    setState(() {
+      _indexing = true;
+      _done = 0;
+      _total = 0;
+    });
+    try {
+      await ref.read(noteRepositoryProvider).indexNotebook(
+        widget.notebookId,
+        onProgress: (d, t) {
+          if (mounted) {
+            setState(() {
+              _done = d;
+              _total = t;
+            });
+          }
+        },
+      );
+      ref.invalidate(notebookIndexProvider(widget.notebookId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _indexing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stateAsync = ref.watch(notebookIndexProvider(widget.notebookId));
+    return stateAsync.maybeWhen(
+      data: (s) {
+        if (s.withText == 0) return const SizedBox.shrink();
+        if (s.indexed >= s.withText && !_indexing) {
+          return const SizedBox.shrink(); // all indexed
+        }
+        return Material(
+          color: theme.colorScheme.primaryContainer,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.md, vertical: Spacing.sm),
+            child: _indexing
+                ? Row(
+                    children: [
+                      const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(width: Spacing.sm),
+                      Expanded(
+                        child: Text(
+                          _total > 0
+                              ? 'Indexing notes… $_done / $_total'
+                              : 'Indexing notes…',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onPrimaryContainer),
+                      const SizedBox(width: Spacing.sm),
+                      Expanded(
+                        child: Text(
+                          '${s.withText - s.indexed} note(s) not indexed — '
+                          'index for smarter answers',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onPrimaryContainer),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _indexAll,
+                        child: const Text('Index all'),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
 class _ChatBackgroundPainter extends CustomPainter {
   final Color color;
 

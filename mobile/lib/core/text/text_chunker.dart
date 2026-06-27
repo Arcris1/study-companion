@@ -3,8 +3,8 @@ class TextChunker {
   final int overlap;
 
   const TextChunker({
-    this.chunkSize = 500,
-    this.overlap = 100,
+    this.chunkSize = 900,
+    this.overlap = 150,
   });
 
   List<String> chunk(String text) {

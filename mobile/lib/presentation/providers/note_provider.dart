@@ -20,6 +20,30 @@ final noteRepositoryProvider = Provider<NoteRepository>((ref) {
   );
 });
 
+/// (total chunks, embedded chunks) for a note — drives the AI-index UI.
+final noteIndexProvider =
+    FutureProvider.family<({int total, int embedded}), int>((ref, noteId) async {
+  return ref.read(noteDatasourceProvider).indexCounts(noteId);
+});
+
+/// (notes with text, notes indexed) for a notebook — drives the chat banner.
+final notebookIndexProvider =
+    FutureProvider.family<({int withText, int indexed}), int>(
+        (ref, notebookId) async {
+  final ds = ref.read(noteDatasourceProvider);
+  final notes = ds.getByNotebookId(notebookId);
+  var withText = 0;
+  var indexed = 0;
+  for (final n in notes) {
+    final c = ds.indexCounts(n.id);
+    if (c.total > 0) {
+      withText++;
+      if (c.embedded > 0) indexed++;
+    }
+  }
+  return (withText: withText, indexed: indexed);
+});
+
 final notesProvider = NotifierProvider.family<NotesNotifier, AsyncValue<List<Note>>, int>(
   (notebookId) => NotesNotifier(notebookId),
 );

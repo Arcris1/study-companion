@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../core/ai/ai_config.dart';
+import '../../core/text/content_sampler.dart';
 import '../../core/algorithms/sm2.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
@@ -69,7 +70,11 @@ class FlashcardRepository implements IFlashcardRepository {
     }
 
     // Take a selection of chunks to fit context window
-    final selectedContent = allChunks.take(15).join('\n\n');
+    final selectedContent = sampleAcross(allChunks, 12000);
+    if (selectedContent.trim().isEmpty) {
+      throw Exception(
+          'No readable text in these notes (a scanned PDF has no extractable text).');
+    }
 
     final prompt = PromptTemplates.generateFlashcards(
       content: selectedContent,

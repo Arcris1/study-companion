@@ -1,5 +1,6 @@
 import 'dart:convert';
 import '../../core/ai/ai_config.dart';
+import '../../core/text/content_sampler.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
 import '../../domain/entities/quiz.dart';
@@ -53,14 +54,12 @@ class QuizRepository implements IQuizRepository {
       allChunks.addAll(chunks.map((c) => c.text));
     }
 
-    // Gather a generous slice of content (OpenAI has a large context window).
-    final buffer = StringBuffer();
-    for (final chunk in allChunks) {
-      if (buffer.length + chunk.length > 12000) break;
-      if (buffer.isNotEmpty) buffer.write('\n');
-      buffer.write(chunk);
+    // Sample across the whole document so questions aren't all from page 1.
+    final selectedContent = sampleAcross(allChunks, 12000);
+    if (selectedContent.trim().isEmpty) {
+      throw Exception(
+          'No readable text in these notes (a scanned PDF has no extractable text).');
     }
-    final selectedContent = buffer.toString();
 
     final actualCount = questionCount.clamp(1, 30);
 
