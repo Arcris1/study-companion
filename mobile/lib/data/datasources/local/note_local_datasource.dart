@@ -65,10 +65,11 @@ class NoteLocalDatasource {
     annQuery.close();
     _annotationBox.removeMany(annIds);
 
-    // Delete the copied PDF file (if this was a PDF import) so it isn't orphaned.
+    // Delete the copied PDF/image file (imported into app storage) if any.
     final note = _box.get(id);
     final path = note?.sourcePath;
-    if (note?.sourceType == 'pdf' && path != null) {
+    if ((note?.sourceType == 'pdf' || note?.sourceType == 'image') &&
+        path != null) {
       try {
         final f = File(path);
         if (f.existsSync()) f.deleteSync();

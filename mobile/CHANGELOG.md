@@ -3,6 +3,24 @@
 All notable changes to StudyCompanion.
 Format: [version] — date — change.
 
+## [1.7.0] — 2026-06-28
+
+### Feature — Annotate: pinch-to-zoom + scroll to turn pages
+- **Pinch-to-zoom** the annotate page with two fingers (zoom is saved); two-finger drag also pans. The 🔍 button still works.
+- **PDF page turning by scrolling:** drag past the bottom of a page to go to the next page (and past the top for the previous) — no need to tap the arrows (arrows kept as a fallback).
+
+## [1.6.0] — 2026-06-28
+
+### Feature — Finer pen/marker sizes
+- Added two thinner sizes each for the pen (1.0, 1.5) and marker (5, 7) in annotate, for finer writing/highlighting. Size dots now render smaller sizes accurately.
+
+## [1.5.0] — 2026-06-28
+
+### Feature — Import images (OCR)
+- Import an image (JPG/PNG/WebP/HEIC/etc.) as a note; the text is extracted with the vision model (OCR) at import.
+- The source image is shown above its extracted (Markdown) text in the note; works with summary/quiz/flashcards and chat after building the AI index.
+- If no API key is set when importing, the note is created image-only and an "Extract text (OCR)" banner lets you OCR it later.
+
 ## [1.3.1] — 2026-06-28
 
 ### Fix — PDF/index UI issues

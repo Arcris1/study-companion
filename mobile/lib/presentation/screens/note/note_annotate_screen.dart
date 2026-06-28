@@ -33,8 +33,8 @@ const List<int> _penColors = [
 ];
 
 /// Selectable tip sizes (stroke widths) for the pen and the highlighter.
-const List<double> _penSizes = [2, 4, 6, 9];
-const List<double> _markerSizes = [10, 18, 28, 40];
+const List<double> _penSizes = [1.0, 1.5, 2.0, 4.0, 6.0, 9.0];
+const List<double> _markerSizes = [5.0, 7.0, 10.0, 18.0, 28.0, 40.0];
 
 enum _Tool { move, pen, highlighter, eraser, sidenote, box }
 
@@ -128,6 +128,12 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   final GlobalKey _captureKey = GlobalKey();
   Offset _lastFocal = Offset.zero;
   bool _scrolling = false;
+  double _overscroll = 0; // accumulated drag past a page edge (PDF page turn)
+  bool _turning = false; // guards against repeat page-turns in one drag
+
+  // Page zoom (pinch + the 🔍 button drive this; persisted via ViewPrefs).
+  double _zoom = ViewPrefs.instance.annotateZoom;
+  double _zoomStart = 1; // zoom at the start of a pinch gesture
 
   // Box-AI region (page coords).
   Offset? _boxStart;
@@ -266,6 +272,9 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   void _onScaleStart(ScaleStartDetails d) {
     _lastFocal = d.focalPoint;
+    _zoomStart = _zoom;
+    _overscroll = 0;
+    _turning = false;
     _scrolling = _tool == _Tool.move || d.pointerCount >= 2;
     if (_scrolling) return;
     final p = d.localFocalPoint;
@@ -297,15 +306,43 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     final delta = d.focalPoint - _lastFocal;
     _lastFocal = d.focalPoint;
 
-    // Two fingers (or Move tool) → scroll the page.
+    // Two fingers (or Move tool) → scroll the page; two fingers also pinch-zoom.
     if (_tool == _Tool.move || d.pointerCount >= 2) {
       _scrolling = true;
       if (_current != null) setState(() => _current = null);
+      if (d.pointerCount >= 2 && d.scale != 1.0) {
+        _applyZoom(_zoomStart * d.scale);
+      }
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
         _scrollController.jumpTo(
           (_scrollController.offset - delta.dy).clamp(0.0, max),
         );
+      }
+      // For PDFs: dragging past a page edge turns the page (replaces arrows).
+      if (_isPdf &&
+          _pageCount > 1 &&
+          !_turning &&
+          (d.scale - 1.0).abs() < 0.05 &&
+          _scrollController.hasClients) {
+        final pos = _scrollController.position;
+        if (delta.dy < 0 && pos.pixels >= pos.maxScrollExtent - 0.5) {
+          _overscroll += -delta.dy;
+          if (_overscroll > 90 && _currentPage < _pageCount) {
+            _overscroll = 0;
+            _turning = true;
+            _goToPage(_currentPage + 1);
+          }
+        } else if (delta.dy > 0 && pos.pixels <= 0.5) {
+          _overscroll += delta.dy;
+          if (_overscroll > 90 && _currentPage > 1) {
+            _overscroll = 0;
+            _turning = true;
+            _goToPage(_currentPage - 1);
+          }
+        } else {
+          _overscroll = 0;
+        }
       }
       // Horizontal pan when zoomed wider than the screen.
       if (_hScrollController.hasClients) {
@@ -336,7 +373,10 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   void _onScaleEnd(ScaleEndDetails d) {
     if (_scrolling) {
       _scrolling = false;
-      _flingScroll(d.velocity.pixelsPerSecond.dy);
+      _overscroll = 0;
+      if (_zoom != _zoomStart) ViewPrefs.instance.setAnnotateZoom(_zoom);
+      if (!_turning) _flingScroll(d.velocity.pixelsPerSecond.dy);
+      _turning = false;
       return;
     }
     if (_current != null) {
@@ -365,6 +405,27 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       duration: Duration(milliseconds: (dist * 1.2).clamp(150, 700).toInt()),
       curve: Curves.decelerate,
     );
+  }
+
+  /// Pinch-zoom the page, keeping the viewport centre roughly stable.
+  void _applyZoom(double newZoom) {
+    newZoom = newZoom.clamp(ViewPrefs.minZoom, ViewPrefs.maxZoom);
+    if ((newZoom - _zoom).abs() < 0.001) return;
+    final k = newZoom / _zoom;
+    setState(() => _zoom = newZoom);
+    _anchorScroll(_scrollController, k);
+    _anchorScroll(_hScrollController, k);
+  }
+
+  void _anchorScroll(ScrollController c, double k) {
+    if (!c.hasClients) return;
+    final vp = c.position.viewportDimension;
+    final target = (c.offset + vp / 2) * k - vp / 2;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (c.hasClients) {
+        c.jumpTo(target.clamp(0.0, c.position.maxScrollExtent));
+      }
+    });
   }
 
   void _eraseAt(Offset p) {
@@ -560,12 +621,12 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
               onPressed: () => showViewScaleSheet(
                 context,
                 title: 'Page zoom',
-                value: ViewPrefs.instance.annotateZoom,
+                value: _zoom,
                 min: ViewPrefs.minZoom,
                 max: ViewPrefs.maxZoom,
                 onChanged: (v) async {
+                  if (mounted) setState(() => _zoom = v);
                   await ViewPrefs.instance.setAnnotateZoom(v);
-                  if (mounted) setState(() {});
                 },
               ),
             ),
@@ -710,7 +771,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
         // First time on a fresh note: lay the page out at the real width so the
         // content reads natural-sized (like the md preview), not magnified.
         if (_pageWidth == 0) _pageWidth = base;
-        final displayWidth = base * ViewPrefs.instance.annotateZoom;
+        final displayWidth = base * _zoom;
         final needsH = displayWidth > base + 0.5;
         final page = SizedBox(
           width: displayWidth,
@@ -741,7 +802,8 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                                   ? const Color(0xFF15151E)
                                   : Colors.white,
                               padding: const EdgeInsets.all(16),
-                              child: _sourceType == 'md'
+                              child: (_sourceType == 'md' ||
+                                      _sourceType == 'image')
                                   ? MarkdownView(
                                       data: _rawText,
                                       selectable: false,
@@ -774,20 +836,17 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                             child: CustomPaint(painter: _BoxPainter(_boxRect!)),
                           ),
                         ),
-                      // Gesture capture — disabled for the Move tool so the
-                      // ScrollView below handles scrolling natively.
+                      // Gesture capture: 1 finger = tool / Move-pan, 2 fingers =
+                      // pinch-zoom + pan (handled in _onScaleUpdate).
                       Positioned.fill(
-                        child: IgnorePointer(
-                          ignoring: _tool == _Tool.move,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onScaleStart: _onScaleStart,
-                            onScaleUpdate: _onScaleUpdate,
-                            onScaleEnd: _onScaleEnd,
-                            onTapUp: _tool == _Tool.sidenote
-                                ? (d) => _addSidenoteAt(d.localPosition)
-                                : null,
-                          ),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onScaleStart: _onScaleStart,
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleEnd: _onScaleEnd,
+                          onTapUp: _tool == _Tool.sidenote
+                              ? (d) => _addSidenoteAt(d.localPosition)
+                              : null,
                         ),
                       ),
                       // Sidenote markers (above gesture so they stay tappable)
@@ -823,12 +882,9 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
               ),
             );
 
-        // With the Move tool, scroll natively (smooth + fling). With drawing
-        // tools the gesture layer captures one finger and we scroll manually
-        // (two-finger) instead, so the page stays still while drawing.
-        final ScrollPhysics physics = _tool == _Tool.move
-            ? const BouncingScrollPhysics()
-            : const NeverScrollableScrollPhysics();
+        // Scrolling + pinch-zoom are driven by the gesture layer (manual
+        // jumpTo + fling) so they work uniformly with drawing tools.
+        const physics = NeverScrollableScrollPhysics();
         return SingleChildScrollView(
           controller: _scrollController,
           physics: physics,
@@ -952,7 +1008,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
   Widget _sizeDot(double size, bool isDark) {
     final current = _tool == _Tool.highlighter ? _markerWidth : _penWidth;
     final selected = current == size;
-    final dia = size.clamp(4, 24).toDouble();
+    final dia = size.clamp(2, 22).toDouble();
     return GestureDetector(
       onTap: () => setState(() {
         if (_tool == _Tool.highlighter) {

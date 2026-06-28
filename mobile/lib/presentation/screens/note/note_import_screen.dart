@@ -53,7 +53,10 @@ class _NoteImportScreenState extends ConsumerState<NoteImportScreen>
 
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['txt', 'md', 'pdf'],
+      allowedExtensions: [
+        'txt', 'md', 'pdf', //
+        'jpg', 'jpeg', 'png', 'webp', 'heic', 'bmp', 'gif',
+      ],
       allowMultiple: true,
     );
 
@@ -413,7 +416,7 @@ class _DropZoneState extends State<_DropZone>
                 const SizedBox(height: Spacing.sm),
 
                 Text(
-                  'Supports TXT, Markdown & PDF · select one or more',
+                  'Supports TXT, Markdown, PDF & images (OCR) · one or more',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: widget.isDark
                         ? AppColors.onSurfaceVariantDark
@@ -445,6 +448,13 @@ class _DropZoneState extends State<_DropZone>
                       icon: Icons.picture_as_pdf_rounded,
                       label: 'PDF',
                       tint: AppColors.error,
+                      isDark: widget.isDark,
+                    ),
+                    const SizedBox(width: Spacing.sm),
+                    _FileTypeBadge(
+                      icon: Icons.image_rounded,
+                      label: 'IMG',
+                      tint: AppColors.warning,
                       isDark: widget.isDark,
                     ),
                   ],

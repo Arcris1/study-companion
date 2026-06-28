@@ -436,7 +436,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                 SliverToBoxAdapter(
                   child: _AiIndexBanner(
                     noteId: widget.noteId,
-                    isPdf: note.sourceType == 'pdf',
+                    canOcr: note.sourceType == 'pdf' ||
+                        note.sourceType == 'image',
                   ),
                 ),
               ];
@@ -461,6 +462,20 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                      // Source image (for image notes) shown above its text.
+                      if (note.sourceType == 'image' &&
+                          note.sourcePath != null &&
+                          File(note.sourcePath!).existsSync())
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: Spacing.md),
+                          child: ClipRRect(
+                            borderRadius: Spacing.borderRadiusSm,
+                            child: Image.file(
+                              File(note.sourcePath!),
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
                       // Status + chunk count row
                       Row(
                         children: [
@@ -502,7 +517,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                                 _selectedText = content?.plainText ?? '';
                               },
                               contextMenuBuilder: _selectionToolbar,
-                              child: note.sourceType == 'md'
+                              child: (note.sourceType == 'md' ||
+                                      note.sourceType == 'image')
                                   ? MarkdownView(
                                       data: note.rawText,
                                       selectable: false,
@@ -937,8 +953,8 @@ class _PulsingTextState extends State<_PulsingText>
 // the note is indexed or has no text. Indexing is never done at import time.
 class _AiIndexBanner extends ConsumerStatefulWidget {
   final int noteId;
-  final bool isPdf;
-  const _AiIndexBanner({required this.noteId, this.isPdf = false});
+  final bool canOcr;
+  const _AiIndexBanner({required this.noteId, this.canOcr = false});
 
   @override
   ConsumerState<_AiIndexBanner> createState() => _AiIndexBannerState();
@@ -1005,10 +1021,10 @@ class _AiIndexBannerState extends ConsumerState<_AiIndexBanner> {
                   : 'Building AI index…');
         }
         if (s.total == 0) {
-          if (widget.isPdf) {
+          if (widget.canOcr) {
             return _bar(theme,
                 icon: Icons.document_scanner_rounded,
-                text: 'Scanned PDF — no selectable text',
+                text: 'No text yet — extract it with AI (OCR)',
                 action: 'Extract text (OCR)',
                 onAction: () => _run(
                     (p) => ref

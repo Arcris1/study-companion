@@ -57,9 +57,18 @@ class NoteRepository implements INoteRepository {
       }
     }
 
+    if (_imageExts.contains(ext)) {
+      try {
+        return await _createNoteFromImage(filePath, fileName, notebookId);
+      } catch (e) {
+        if (e is FileException) rethrow;
+        throw FileException('Image import failed: $e');
+      }
+    }
+
     if (ext != '.txt' && ext != '.md') {
       throw FileException(
-          'Unsupported file type "$ext" — only .md, .txt and .pdf are supported.');
+          'Unsupported file type "$ext" — only .md, .txt, .pdf and images are supported.');
     }
 
     try {
@@ -138,6 +147,76 @@ class NoteRepository implements INoteRepository {
 
     noteModel.chunkCount = chunkModels.length;
     noteModel = _datasource.update(noteModel);
+    return noteModel.toEntity();
+  }
+
+  static const _imageExts = {
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+    '.heic',
+    '.bmp',
+    '.gif',
+  };
+
+  static const _imageOcrPrompt =
+      'Transcribe ALL text from this image exactly as it appears (including '
+      'handwriting), preserving headings, lists and tables using Markdown. '
+      'Output only the transcribed text — no commentary. If there is no text, '
+      'reply with an empty response.';
+
+  /// Imports an image: copies it to app storage and OCRs it with the vision
+  /// model (one call) so the extracted text becomes the note content. If no API
+  /// key is set, the note is created image-only and can be OCR'd later.
+  Future<Note> _createNoteFromImage(
+      String filePath, String title, int notebookId) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final imgDir = Directory(p.join(dir.path, 'images'));
+    if (!imgDir.existsSync()) imgDir.createSync(recursive: true);
+    final dest = p.join(imgDir.path,
+        '${DateTime.now().millisecondsSinceEpoch}_${p.basename(filePath)}');
+    await File(filePath).copy(dest);
+
+    var rawText = '';
+    if (OpenAiClient.instance.hasKey) {
+      try {
+        final bytes = await File(dest).readAsBytes();
+        final buf = StringBuffer();
+        await for (final t in OpenAiClient.instance
+            .visionStream(_imageOcrPrompt, bytes, maxTokens: 1500)) {
+          buf.write(t);
+        }
+        rawText = buf.toString().trim();
+      } catch (_) {}
+    }
+
+    final now = DateTime.now();
+    var noteModel = NoteModel(
+      notebookId: notebookId,
+      title: title,
+      rawText: rawText,
+      statusStr: NoteStatus.ready.name,
+      sourceType: 'image',
+      sourcePath: dest,
+      createdAt: now,
+      updatedAt: now,
+    );
+    noteModel = _datasource.create(noteModel);
+
+    if (rawText.isNotEmpty) {
+      final chunkModels = _chunker.chunk(rawText).asMap().entries.map((e) {
+        return NoteChunkModel(
+          noteId: noteModel.id,
+          text: e.value,
+          chunkIndex: e.key,
+        );
+      }).toList();
+      _datasource.saveChunks(chunkModels);
+      noteModel.chunkCount = chunkModels.length;
+      noteModel = _datasource.update(noteModel);
+    }
+
     return noteModel.toEntity();
   }
 
@@ -386,17 +465,45 @@ class NoteRepository implements INoteRepository {
     }
   }
 
-  /// OCRs a scanned PDF (no extractable text) with the vision model and
-  /// rebuilds its text + page-aware chunks. The user can then build the AI
-  /// index. Costly — capped by [PdfOcrService.ocrPages].
+  /// OCRs a scanned PDF or an image with the vision model and rebuilds the
+  /// note's text + chunks. The user can then build the AI index.
   Future<void> ocrNote(int noteId,
       {void Function(int done, int total)? onProgress}) async {
     if (!OpenAiClient.instance.hasKey) {
       throw Exception('Add an OpenAI API key in Settings to use OCR.');
     }
     final note = _datasource.getById(noteId);
-    if (note == null || note.sourceType != 'pdf' || note.sourcePath == null) {
-      throw Exception('OCR is only available for PDF notes.');
+    if (note == null ||
+        note.sourcePath == null ||
+        (note.sourceType != 'pdf' && note.sourceType != 'image')) {
+      throw Exception('OCR is only available for PDF or image notes.');
+    }
+
+    // Single image → one vision call.
+    if (note.sourceType == 'image') {
+      onProgress?.call(0, 1);
+      final bytes = await File(note.sourcePath!).readAsBytes();
+      final buf = StringBuffer();
+      await for (final t in OpenAiClient.instance
+          .visionStream(_imageOcrPrompt, bytes, maxTokens: 1500)) {
+        buf.write(t);
+      }
+      final text = buf.toString().trim();
+      if (text.isEmpty) {
+        throw Exception('OCR found no readable text in this image.');
+      }
+      _datasource.deleteChunks(noteId);
+      final chunkModels = _chunker.chunk(text).asMap().entries.map((e) {
+        return NoteChunkModel(
+            noteId: noteId, text: e.value, chunkIndex: e.key);
+      }).toList();
+      _datasource.saveChunks(chunkModels);
+      note.rawText = text;
+      note.chunkCount = chunkModels.length;
+      note.updatedAt = DateTime.now();
+      _datasource.update(note);
+      onProgress?.call(1, 1);
+      return;
     }
 
     final pages =

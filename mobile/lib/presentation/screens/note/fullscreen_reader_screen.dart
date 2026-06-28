@@ -97,7 +97,8 @@ class _FullscreenReaderScreenState
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 760),
-                          child: _sourceType == 'md'
+                          child: (_sourceType == 'md' ||
+                                  _sourceType == 'image')
                               ? MarkdownView(data: _rawText, selectable: true)
                               : SelectableText(
                                 _rawText,
