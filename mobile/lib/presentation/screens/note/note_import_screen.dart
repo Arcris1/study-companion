@@ -48,9 +48,7 @@ class _NoteImportScreenState extends ConsumerState<NoteImportScreen>
   }
 
   Future<void> _pickFiles() async {
-    final importNotifier = ref.read(noteImportProvider.notifier);
-    importNotifier.setPicking();
-
+    ref.read(noteImportProvider.notifier).setPicking();
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: [
@@ -59,7 +57,22 @@ class _NoteImportScreenState extends ConsumerState<NoteImportScreen>
       ],
       allowMultiple: true,
     );
+    await _runImport(result);
+  }
 
+  /// Picks images from the photo library/gallery (the document picker doesn't
+  /// surface Photos, especially on iOS).
+  Future<void> _pickFromGallery() async {
+    ref.read(noteImportProvider.notifier).setPicking();
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+    );
+    await _runImport(result);
+  }
+
+  Future<void> _runImport(FilePickerResult? result) async {
+    final importNotifier = ref.read(noteImportProvider.notifier);
     if (result == null || result.files.isEmpty) {
       importNotifier.reset();
       return;
@@ -208,9 +221,26 @@ class _NoteImportScreenState extends ConsumerState<NoteImportScreen>
                         isDark: isDark,
                         onRetry: _pickFiles,
                       )
-                    : _DropZone(
-                        isDark: isDark,
-                        onTap: _pickFiles,
+                    : Column(
+                        children: [
+                          _DropZone(
+                            isDark: isDark,
+                            onTap: _pickFiles,
+                          ),
+                          const SizedBox(height: Spacing.md),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _pickFromGallery,
+                              icon: const Icon(Icons.photo_library_rounded),
+                              label: const Text('Choose from Photos'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: Spacing.md),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
           ),
 

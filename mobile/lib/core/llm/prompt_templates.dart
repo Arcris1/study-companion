@@ -48,6 +48,7 @@ Question: $question<|end_of_turn|>
     required int numQuestions,
     required String questionType,
     required String difficulty,
+    String styleInstruction = '',
   }) {
     String typeInstruction;
     if (questionType == 'trueFalse' || questionType == 'true_false') {
@@ -58,16 +59,24 @@ Options MUST be ["True", "False"]. Mix true and false answers.''';
     } else if (questionType == 'fillBlank' || questionType == 'fill_blank') {
       typeInstruction = 'Each question must have a ___ blank. Options should be empty. correct_answer is the missing word.';
     } else {
-      typeInstruction = 'Each question must have 4 options. Only one is correct. Shuffle the correct answer position randomly.';
+      typeInstruction = '''Each question must have exactly 4 options; exactly one is correct. Shuffle the correct answer's position randomly.
+Write strong, plausible distractors so the answer is NOT obvious. Favour these distractor types:
+- Adjacent/related criterion (a real concept that is close but not what's asked)
+- Opposing theoretical construct
+- Ethical-vs-legal (or similarly easy-to-confuse) distinction
+- Sound-alike / look-alike term
+Keep all options similar in length and grammatical form; never use "all/none of the above".''';
     }
+
+    final style = styleInstruction.trim().isEmpty ? '' : '$styleInstruction\n\n';
 
     return '''<|begin_of_turn|>system
 ${AiConfig.instance.systemPrompt(AiOp.quiz)}
-Generate exactly $numQuestions questions at $difficulty difficulty.
+Generate EXACTLY $numQuestions questions at $difficulty difficulty — do not return fewer.
 
-$typeInstruction
+$style$typeInstruction
 
-Return ONLY valid JSON:
+Keep each "explanation" to 1-2 sentences. Return ONLY valid JSON:
 {"questions": [{"question": "...", "type": "$questionType", "options": [...], "correct_answer": "...", "explanation": "..."}]}<|end_of_turn|>
 <|begin_of_turn|>user
 Generate a quiz from this material:

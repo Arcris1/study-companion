@@ -3,6 +3,25 @@
 All notable changes to StudyCompanion.
 Format: [version] — date — change.
 
+## [1.8.2] — 2026-06-29
+
+### Fix — Pre-push hardening
+- **iOS HEIC photos now OCR correctly:** gallery/image imports are decoded and re-encoded to PNG (downscaled) before vision OCR — OpenAI rejects HEIC, so iOS photos used to silently produce no text.
+- **Quizzes:** one malformed question no longer discards the whole quiz (bad entries are skipped); the question-count token budget is now capped at the model's safe ceiling.
+
+## [1.8.1] — 2026-06-29
+
+### Fix — Import images from Photos/Gallery
+- Added a **"Choose from Photos"** button on the import screen that opens the photo library/gallery (the document picker doesn't surface Photos, especially on iOS). Picked images go through the same OCR import flow.
+
+## [1.8.0] — 2026-06-29
+
+### Feature — Smarter quizzes + fixes
+- **Question Style** option on the Create Quiz screen: Mixed (Bloom's), Recall, Application (situational), or Critical — controls the cognitive level of the questions.
+- Questions now follow **Bloom's taxonomy** and prefer **situational/application** stems; MCQ **distractors** are stronger and less obvious (adjacent criteria, opposing constructs, ethical-vs-legal, sound-alike terms).
+- **Fixed the count bug:** asking for 20 questions now returns 20 — token budget scales with the count (was truncating to ~18), and truncated output is salvaged so no questions are lost.
+- **Delete confirmation** for quizzes (no more accidental deletions).
+
 ## [1.7.0] — 2026-06-28
 
 ### Feature — Annotate: pinch-to-zoom + scroll to turn pages

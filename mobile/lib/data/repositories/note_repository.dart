@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../core/ai/ai_config.dart';
 import '../../core/openai/openai_client.dart';
 import '../../core/pdf/pdf_service.dart';
 import '../../core/pdf/pdf_ocr_service.dart';
+import '../../core/utils/image_utils.dart';
 import '../../core/errors/exceptions.dart';
 import '../../core/embedding/embedding_service.dart';
 import '../../core/llm/llm_service.dart';
@@ -181,7 +183,13 @@ class NoteRepository implements INoteRepository {
     var rawText = '';
     if (OpenAiClient.instance.hasKey) {
       try {
-        final bytes = await File(dest).readAsBytes();
+        final raw = await File(dest).readAsBytes();
+        Uint8List bytes;
+        try {
+          bytes = await toVisionPng(raw);
+        } catch (_) {
+          bytes = raw; // unsupported decode → try the original bytes
+        }
         final buf = StringBuffer();
         await for (final t in OpenAiClient.instance
             .visionStream(_imageOcrPrompt, bytes, maxTokens: 1500)) {
@@ -482,7 +490,13 @@ class NoteRepository implements INoteRepository {
     // Single image → one vision call.
     if (note.sourceType == 'image') {
       onProgress?.call(0, 1);
-      final bytes = await File(note.sourcePath!).readAsBytes();
+      final raw = await File(note.sourcePath!).readAsBytes();
+      Uint8List bytes;
+      try {
+        bytes = await toVisionPng(raw);
+      } catch (_) {
+        bytes = raw;
+      }
       final buf = StringBuffer();
       await for (final t in OpenAiClient.instance
           .visionStream(_imageOcrPrompt, bytes, maxTokens: 1500)) {

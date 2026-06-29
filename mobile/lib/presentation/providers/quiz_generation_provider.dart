@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/enums/difficulty_level.dart';
 import '../../domain/enums/question_type.dart';
+import '../../domain/enums/quiz_style.dart';
 
 class QuizConfig {
   final QuestionType questionType;
   final DifficultyLevel difficulty;
   final int questionCount;
+  final QuizStyle style;
 
   /// Notes to draw questions from; empty = all notes ("General").
   final List<int> selectedNoteIds;
@@ -16,6 +18,7 @@ class QuizConfig {
     this.questionType = QuestionType.mcq,
     this.difficulty = DifficultyLevel.medium,
     this.questionCount = 10,
+    this.style = QuizStyle.mixed,
     this.selectedNoteIds = const [],
     this.isGenerating = false,
     this.error,
@@ -25,6 +28,7 @@ class QuizConfig {
     QuestionType? questionType,
     DifficultyLevel? difficulty,
     int? questionCount,
+    QuizStyle? style,
     List<int>? selectedNoteIds,
     bool? isGenerating,
     String? error,
@@ -33,6 +37,7 @@ class QuizConfig {
       questionType: questionType ?? this.questionType,
       difficulty: difficulty ?? this.difficulty,
       questionCount: questionCount ?? this.questionCount,
+      style: style ?? this.style,
       selectedNoteIds: selectedNoteIds ?? this.selectedNoteIds,
       isGenerating: isGenerating ?? this.isGenerating,
       error: error,
@@ -58,6 +63,10 @@ class QuizConfigNotifier extends Notifier<QuizConfig> {
 
   void setQuestionCount(int count) {
     state = state.copyWith(questionCount: count.clamp(5, 30));
+  }
+
+  void setStyle(QuizStyle style) {
+    state = state.copyWith(style: style);
   }
 
   void setNoteIds(List<int> ids) {

@@ -473,8 +473,36 @@ class _NotebookDetailScreenState extends ConsumerState<NotebookDetailScreen>
                                     : AppColors.onSurfaceVariantLight),
                             tooltip: 'Delete',
                             constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                            onPressed: () {
-                              ref.read(quizzesProvider(widget.notebookId).notifier).delete(quiz.id);
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete quiz?'),
+                                  content: Text(
+                                    'Delete "${quiz.title}"? This also removes its results and can\'t be undone.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.error),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                ref
+                                    .read(quizzesProvider(widget.notebookId)
+                                        .notifier)
+                                    .delete(quiz.id);
+                              }
                             },
                           ),
                         ],

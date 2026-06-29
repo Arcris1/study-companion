@@ -7,6 +7,7 @@ import '../../domain/entities/quiz.dart';
 import '../../domain/entities/quiz_question.dart';
 import '../../domain/entities/quiz_attempt.dart';
 import '../../domain/enums/difficulty_level.dart';
+import '../../domain/enums/quiz_style.dart';
 import '../../domain/enums/question_type.dart';
 import '../../domain/repositories/i_quiz_repository.dart';
 import '../datasources/local/quiz_local_datasource.dart';
@@ -36,6 +37,7 @@ class QuizRepository implements IQuizRepository {
     required QuestionType questionType,
     required DifficultyLevel difficulty,
     required int questionCount,
+    QuizStyle style = QuizStyle.mixed,
     List<int>? noteIds,
   }) async {
     // Gather note content from the notebook — optionally limited to a chosen
@@ -68,38 +70,53 @@ class QuizRepository implements IQuizRepository {
       numQuestions: actualCount,
       questionType: questionType.name,
       difficulty: difficulty.name,
+      styleInstruction: style.promptInstruction,
     );
+
+    // Scale tokens with the question count so large (and situational) quizzes
+    // aren't truncated — this is why "20 requested" used to return only ~18.
+    final base = AiConfig.instance.tokenLimit(AiOp.quiz);
+    final scaled = actualCount * 400 + 800;
+    // Floor at the configured limit, but always cap at the model's safe ceiling.
+    final maxTokens = (scaled > base ? scaled : base).clamp(800, 12000);
 
     final response = await _llmService.generate(
       prompt,
-      maxTokens: AiConfig.instance.tokenLimit(AiOp.quiz),
+      maxTokens: maxTokens,
     );
 
     // Parse JSON response — try multiple strategies
     List<QuizQuestionModel> questionModels;
     try {
       List questions;
+      final r = response.trim();
       try {
         // Strategy 1: Response continues from prompt's {"questions": [
-        final jsonStr = '{"questions": [$response';
-        final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
-        questions = parsed['questions'] as List;
+        questions =
+            (jsonDecode('{"questions": [$r') as Map)['questions'] as List;
       } catch (_) {
         try {
           // Strategy 2: Response is complete JSON with {"questions": [...]}
-          final parsed = jsonDecode(response) as Map<String, dynamic>;
-          questions = parsed['questions'] as List;
+          questions = (jsonDecode(r) as Map)['questions'] as List;
         } catch (_) {
           try {
             // Strategy 3: Response is just a JSON array [...]
-            questions = jsonDecode(response) as List;
+            questions = jsonDecode(r) as List;
           } catch (_) {
-            // Strategy 4: Extract JSON from response text
-            final jsonMatch = RegExp(r'\[[\s\S]*\]').firstMatch(response);
-            if (jsonMatch != null) {
-              questions = jsonDecode(jsonMatch.group(0)!) as List;
+            // Strategy 4: Salvage a truncated array by closing it at the last
+            // complete object, so we keep every question that was generated.
+            final lastBrace = r.lastIndexOf('}');
+            if (lastBrace != -1) {
+              questions = (jsonDecode(
+                      '{"questions": [${r.substring(0, lastBrace + 1)}]}')
+                  as Map)['questions'] as List;
             } else {
-              throw const FormatException('No valid JSON found');
+              final jsonMatch = RegExp(r'\[[\s\S]*\]').firstMatch(r);
+              if (jsonMatch != null) {
+                questions = jsonDecode(jsonMatch.group(0)!) as List;
+              } else {
+                throw const FormatException('No valid JSON found');
+              }
             }
           }
         }
@@ -115,19 +132,43 @@ class QuizRepository implements IQuizRepository {
         createdAt: DateTime.now(),
       ));
 
-      questionModels = questions.asMap().entries.map((entry) {
-        final q = entry.value as Map<String, dynamic>;
-        return QuizQuestionModel(
+      // Map defensively: skip malformed entries so one bad question doesn't
+      // throw away the whole quiz (the model occasionally omits a field).
+      questionModels = <QuizQuestionModel>[];
+      for (final raw in questions) {
+        if (raw is! Map) continue;
+        final text = raw['question'];
+        final answer = raw['correct_answer'];
+        if (text is! String || text.trim().isEmpty || answer == null) continue;
+        questionModels.add(QuizQuestionModel(
           quizId: quizModel.id,
-          question: q['question'] as String,
+          question: text,
           typeStr: questionType.name,
-          optionsJson: jsonEncode(q['options'] ?? []),
-          correctAnswer: q['correct_answer'] as String,
-          explanation: q['explanation'] as String?,
-          questionIndex: entry.key,
-          topic: q['topic'] as String?,
-        );
-      }).toList();
+          optionsJson: jsonEncode(raw['options'] ?? []),
+          correctAnswer: answer.toString(),
+          explanation: raw['explanation']?.toString(),
+          questionIndex: questionModels.length,
+          topic: raw['topic']?.toString(),
+        ));
+      }
+
+      if (questionModels.isEmpty) {
+        questionModels.add(QuizQuestionModel(
+          quizId: quizModel.id,
+          question:
+              'Quiz generation failed. Please try again with different settings.',
+          typeStr: QuestionType.mcq.name,
+          optionsJson: jsonEncode([
+            'Try again',
+            'Adjust settings',
+            'Use different notes',
+            'All of the above'
+          ]),
+          correctAnswer: 'All of the above',
+          explanation: 'The AI response could not be parsed into questions.',
+          questionIndex: 0,
+        ));
+      }
 
       _quizDatasource.saveQuestions(questionModels);
       return quizModel.toEntity();

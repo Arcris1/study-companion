@@ -10,6 +10,7 @@ import '../../../config/theme/gradients.dart';
 import '../../../config/theme/animations.dart';
 import '../../../domain/enums/difficulty_level.dart';
 import '../../../domain/enums/question_type.dart';
+import '../../../domain/enums/quiz_style.dart';
 import '../../providers/quiz_provider.dart';
 import '../../providers/quiz_generation_provider.dart';
 import '../../widgets/common/sc_button.dart';
@@ -124,6 +125,33 @@ class QuizConfigScreen extends ConsumerWidget {
 
               const SizedBox(height: Spacing.lg),
 
+              // ── Question Style (Bloom's taxonomy) ─────────────────
+              Text('Question Style', style: theme.textTheme.titleSmall),
+              const SizedBox(height: Spacing.space12),
+              Wrap(
+                spacing: Spacing.sm,
+                runSpacing: Spacing.sm,
+                children: QuizStyle.values.map((s) {
+                  final selected = config.style == s;
+                  return _StyleChip(
+                    label: s.label,
+                    selected: selected,
+                    isDark: isDark,
+                    onTap: () =>
+                        ref.read(quizConfigProvider.notifier).setStyle(s),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: Spacing.sm),
+              Text(
+                config.style.description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+
+              const SizedBox(height: Spacing.lg),
+
               // ── Question Count Stepper ────────────────────────────
               Text('Number of Questions', style: theme.textTheme.titleSmall),
               const SizedBox(height: Spacing.space12),
@@ -217,6 +245,7 @@ class QuizConfigScreen extends ConsumerWidget {
         questionType: config.questionType,
         difficulty: config.difficulty,
         questionCount: config.questionCount,
+        style: config.style,
         noteIds: config.selectedNoteIds,
       );
       configNotifier.setGenerating(false);
@@ -300,6 +329,60 @@ class _SourceSelector extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Question Style Chip ─────────────────────────────────────────────────────
+
+class _StyleChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _StyleChip({
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppAnimations.durationFast,
+        curve: AppAnimations.easeOut,
+        padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md, vertical: Spacing.sm),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : (isDark
+                  ? AppColors.surfaceContainerDark
+                  : AppColors.surfaceContainerLight),
+          borderRadius: Spacing.borderRadiusPill,
+          border: Border.all(
+            color: selected
+                ? AppColors.primary
+                : (isDark
+                    ? AppColors.outlineVariantDark
+                    : AppColors.outlineVariantLight),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color:
+                selected ? AppColors.primary : theme.colorScheme.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
         ),
       ),
     );

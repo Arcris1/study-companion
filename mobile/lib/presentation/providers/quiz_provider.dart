@@ -7,6 +7,7 @@ import '../../domain/entities/quiz.dart';
 import '../../domain/entities/quiz_question.dart';
 import '../../domain/entities/quiz_attempt.dart';
 import '../../domain/enums/difficulty_level.dart';
+import '../../domain/enums/quiz_style.dart';
 import '../../domain/enums/question_type.dart';
 import 'note_provider.dart';
 
@@ -58,6 +59,7 @@ class QuizzesNotifier extends Notifier<AsyncValue<List<Quiz>>> {
     required QuestionType questionType,
     required DifficultyLevel difficulty,
     required int questionCount,
+    QuizStyle style = QuizStyle.mixed,
     List<int>? noteIds,
   }) async {
     final quiz = await _repository.generateQuiz(
@@ -66,6 +68,7 @@ class QuizzesNotifier extends Notifier<AsyncValue<List<Quiz>>> {
       questionType: questionType,
       difficulty: difficulty,
       questionCount: questionCount,
+      style: style,
       noteIds: noteIds,
     );
     await load();

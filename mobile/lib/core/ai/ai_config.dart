@@ -52,7 +52,7 @@ const Map<AiOp, AiOpMeta> aiOps = {
     description:
         'Instructions for quiz generation. The required JSON format, question count and difficulty are appended automatically.',
     defaultPrompt:
-        'You are a quiz generator. Write clear, accurate questions that test genuine understanding of the material.',
+        'You are an expert exam writer. Write clear, accurate questions that test genuine understanding, following Bloom\'s taxonomy. Prefer situational/application questions (short realistic scenarios) over rote recall. Make multiple-choice distractors plausible and non-obvious (e.g. adjacent criteria, opposing constructs, ethical-vs-legal confusions, sound-alike terms).',
     defaultTokens: 3000,
   ),
   AiOp.flashcards: AiOpMeta(
