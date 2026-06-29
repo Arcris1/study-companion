@@ -1,7 +1,7 @@
 name: study_companion
 description: "AI-powered study companion (OpenAI-backed)"
 publish_to: 'none'
-version: 1.8.2
+version: 1.8.3
 
 environment:
   sdk: ^3.11.1

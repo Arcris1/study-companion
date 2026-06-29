@@ -5,6 +5,7 @@ import 'app.dart';
 import 'core/ai/ai_config.dart';
 import 'core/utils/annotate_prefs.dart';
 import 'core/utils/view_prefs.dart';
+import 'core/utils/app_paths.dart';
 import 'core/database/objectbox.dart';
 import 'core/openai/api_key_store.dart';
 import 'core/openai/openai_client.dart';
@@ -16,6 +17,7 @@ void main() async {
   await AiConfig.instance.load();
   await AnnotatePrefs.instance.load();
   await ViewPrefs.instance.load();
+  await AppPaths.init();
   pdfrxFlutterInitialize();
 
   // Initialize ObjectBox

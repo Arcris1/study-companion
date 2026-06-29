@@ -8,6 +8,7 @@ import '../../models/note_model.dart';
 import '../../models/note_chunk_model.dart';
 import '../../models/highlight_model.dart';
 import '../../models/note_annotation_model.dart';
+import '../../../core/utils/app_paths.dart';
 
 class NoteLocalDatasource {
   final ObjectBox _objectBox;
@@ -67,7 +68,7 @@ class NoteLocalDatasource {
 
     // Delete the copied PDF/image file (imported into app storage) if any.
     final note = _box.get(id);
-    final path = note?.sourcePath;
+    final path = AppPaths.resolve(note?.sourcePath);
     if ((note?.sourceType == 'pdf' || note?.sourceType == 'image') &&
         path != null) {
       try {

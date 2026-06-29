@@ -3,6 +3,11 @@
 All notable changes to StudyCompanion.
 Format: [version] — date — change.
 
+## [1.8.3] — 2026-06-29
+
+### Fix — "PDF file unavailable" after an update (iOS)
+- PDF/image file paths are now stored **relative** to the app documents directory and resolved at read time. iOS changes the app container's absolute path across updates, which broke saved PDFs/images ("file unavailable"). Existing notes are recovered automatically (legacy absolute paths are salvaged), as long as the files persisted across the update.
+
 ## [1.8.2] — 2026-06-29
 
 ### Fix — Pre-push hardening

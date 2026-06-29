@@ -7,6 +7,7 @@ import '../../core/openai/openai_client.dart';
 import '../../core/pdf/pdf_service.dart';
 import '../../core/pdf/pdf_ocr_service.dart';
 import '../../core/utils/image_utils.dart';
+import '../../core/utils/app_paths.dart';
 import '../../core/errors/exceptions.dart';
 import '../../core/embedding/embedding_service.dart';
 import '../../core/llm/llm_service.dart';
@@ -120,7 +121,7 @@ class NoteRepository implements INoteRepository {
       rawText: rawText,
       statusStr: NoteStatus.ready.name,
       sourceType: 'pdf',
-      sourcePath: dest,
+      sourcePath: AppPaths.toRelative(dest),
       createdAt: now,
       updatedAt: now,
     );
@@ -206,7 +207,7 @@ class NoteRepository implements INoteRepository {
       rawText: rawText,
       statusStr: NoteStatus.ready.name,
       sourceType: 'image',
-      sourcePath: dest,
+      sourcePath: AppPaths.toRelative(dest),
       createdAt: now,
       updatedAt: now,
     );
@@ -486,11 +487,15 @@ class NoteRepository implements INoteRepository {
         (note.sourceType != 'pdf' && note.sourceType != 'image')) {
       throw Exception('OCR is only available for PDF or image notes.');
     }
+    final path = AppPaths.resolve(note.sourcePath);
+    if (path == null || !File(path).existsSync()) {
+      throw Exception('The source file is no longer available.');
+    }
 
     // Single image → one vision call.
     if (note.sourceType == 'image') {
       onProgress?.call(0, 1);
-      final raw = await File(note.sourcePath!).readAsBytes();
+      final raw = await File(path).readAsBytes();
       Uint8List bytes;
       try {
         bytes = await toVisionPng(raw);
@@ -521,7 +526,7 @@ class NoteRepository implements INoteRepository {
     }
 
     final pages =
-        await PdfOcrService.ocrPages(note.sourcePath!, onProgress: onProgress);
+        await PdfOcrService.ocrPages(path, onProgress: onProgress);
 
     final buffer = StringBuffer();
     for (final t in pages) {

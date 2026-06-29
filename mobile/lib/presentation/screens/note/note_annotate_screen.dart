@@ -13,6 +13,7 @@ import '../../../core/openai/openai_client.dart';
 import '../../../core/llm/llm_service.dart';
 import '../../../core/utils/annotate_prefs.dart';
 import '../../../core/utils/view_prefs.dart';
+import '../../../core/utils/app_paths.dart';
 import '../../../data/models/note_annotation_model.dart';
 import '../../providers/note_provider.dart';
 import '../../providers/note_annotation_provider.dart';
@@ -166,7 +167,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   Future<void> _load() async {
     final note = await ref.read(noteRepositoryProvider).getById(widget.noteId);
-    final pdfPath = note?.sourcePath;
+    final pdfPath = AppPaths.resolve(note?.sourcePath);
     final isPdf = note?.sourceType == 'pdf' &&
         pdfPath != null &&
         File(pdfPath).existsSync();

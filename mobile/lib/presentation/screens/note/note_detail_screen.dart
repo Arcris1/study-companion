@@ -6,6 +6,7 @@ import 'package:pdfrx/pdfrx.dart';
 import '../../../config/theme/app_colors.dart';
 import '../../../core/utils/annotate_prefs.dart';
 import '../../../core/utils/view_prefs.dart';
+import '../../../core/utils/app_paths.dart';
 import '../../../config/theme/gradients.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
@@ -463,19 +464,8 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                       // Source image (for image notes) shown above its text.
-                      if (note.sourceType == 'image' &&
-                          note.sourcePath != null &&
-                          File(note.sourcePath!).existsSync())
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: Spacing.md),
-                          child: ClipRRect(
-                            borderRadius: Spacing.borderRadiusSm,
-                            child: Image.file(
-                              File(note.sourcePath!),
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
+                      if (note.sourceType == 'image')
+                        _ImageHeader(path: note.sourcePath),
                       // Status + chunk count row
                       Row(
                         children: [
@@ -1086,6 +1076,27 @@ class _AiIndexBannerState extends ConsumerState<_AiIndexBanner> {
   }
 }
 
+// Source image shown above an image note's extracted text.
+class _ImageHeader extends StatelessWidget {
+  final String? path;
+  const _ImageHeader({this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    final resolved = AppPaths.resolve(path);
+    if (resolved == null || !File(resolved).existsSync()) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.md),
+      child: ClipRRect(
+        borderRadius: Spacing.borderRadiusSm,
+        child: Image.file(File(resolved), fit: BoxFit.contain),
+      ),
+    );
+  }
+}
+
 // Inline rendered PDF for the Content tab. Rendered as a normal ListView of
 // page images so it scrolls smoothly inside the NestedScrollView (the full
 // PdfViewer's own scroll fights the outer scroll). Pinch-zoom is available in
@@ -1096,7 +1107,7 @@ class _PdfContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = path;
+    final p = AppPaths.resolve(path);
     if (p == null || !File(p).existsSync()) {
       return const Center(child: Text('PDF file unavailable'));
     }

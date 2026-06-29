@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 import '../../../config/theme/app_colors.dart';
+import '../../../core/utils/app_paths.dart';
 import '../../../core/utils/view_prefs.dart';
 import '../../providers/note_provider.dart';
 import '../../widgets/common/markdown_view.dart';
@@ -56,7 +57,7 @@ class _FullscreenReaderScreenState
   }
 
   Widget _pdfBody() {
-    final path = _sourcePath;
+    final path = AppPaths.resolve(_sourcePath);
     if (path == null || !File(path).existsSync()) {
       return const Center(child: Text('PDF file unavailable'));
     }
