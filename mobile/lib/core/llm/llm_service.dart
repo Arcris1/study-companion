@@ -22,8 +22,8 @@ class LlmService {
 
   LlmStatus get status => _status;
 
-  /// Ready when an OpenAI API key is configured.
-  bool get isReady => OpenAiClient.instance.hasKey;
+  /// Ready when the active text provider (OpenAI or DeepSeek) has a key.
+  bool get isReady => OpenAiClient.instance.hasTextKey;
 
   /// Kept for interface compatibility with the old model-download flow.
   /// There is no model to load for the cloud backend — readiness depends

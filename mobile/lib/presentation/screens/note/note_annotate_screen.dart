@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -26,11 +28,15 @@ const double _kPageWidth = 400;
 
 const List<int> _penColors = [
   0xFFEF4444, // red
-  0xFF3B82F6, // blue
-  0xFF22C55E, // green
+  0xFFF97316, // orange
   0xFFF59E0B, // amber
+  0xFF22C55E, // green
+  0xFF14B8A6, // teal
+  0xFF3B82F6, // blue
   0xFFA855F7, // purple
+  0xFFEC4899, // pink
   0xFF111827, // ink
+  0xFF6B7280, // gray
 ];
 
 /// Selectable tip sizes (stroke widths) for the pen and the highlighter.
@@ -118,17 +124,29 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   double _pdfAspect = 1.414; // height / width of the current page
 
   _Tool _tool = _Tool.move;
-  int _colorIndex = 5; // ink
+  int _colorIndex = 8; // ink
+  int? _customColor; // last custom-picked colour (selected when _colorIndex == presets)
   double _penWidth = 4;
   double _markerWidth = 18;
   bool _dirty = false;
   bool _fullscreen = false;
+  Timer? _autoSaveTimer;
+
+  /// Marks the canvas dirty and schedules a debounced auto-save.
+  void _markDirty() {
+    _dirty = true;
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted && _dirty) _save();
+    });
+  }
 
   final ScrollController _scrollController = ScrollController();
   final ScrollController _hScrollController = ScrollController();
   final GlobalKey _captureKey = GlobalKey();
   Offset _lastFocal = Offset.zero;
   bool _scrolling = false;
+  PointerDeviceKind _downKind = PointerDeviceKind.touch; // last pointer-down kind
   double _overscroll = 0; // accumulated drag past a page edge (PDF page turn)
   bool _turning = false; // guards against repeat page-turns in one drag
 
@@ -151,6 +169,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   @override
   void dispose() {
+    _autoSaveTimer?.cancel();
     _scrollController.dispose();
     _hScrollController.dispose();
     _pdfDoc?.dispose();
@@ -267,7 +286,22 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     _dirty = false;
   }
 
-  int get _activeColor => _penColors[_colorIndex];
+  int get _activeColor => _colorIndex >= _penColors.length
+      ? (_customColor ?? _penColors.last)
+      : _penColors[_colorIndex];
+
+  Future<void> _pickCustomColor() async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (_) => _ColorPickerDialog(initial: _customColor ?? _activeColor),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _customColor = picked;
+        _colorIndex = _penColors.length; // select the custom swatch
+      });
+    }
+  }
 
   // ── Gestures: 1 finger = tool, 2 fingers = scroll (always) ──────────────────
 
@@ -276,7 +310,10 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     _zoomStart = _zoom;
     _overscroll = 0;
     _turning = false;
-    _scrolling = _tool == _Tool.move || d.pointerCount >= 2;
+    // Pen-only mode: a finger (non-stylus) scrolls instead of drawing.
+    final penOnlyScroll =
+        AnnotatePrefs.instance.penOnly && _downKind != PointerDeviceKind.stylus;
+    _scrolling = _tool == _Tool.move || d.pointerCount >= 2 || penOnlyScroll;
     if (_scrolling) return;
     final p = d.localFocalPoint;
     if (_tool == _Tool.pen || _tool == _Tool.highlighter) {
@@ -307,8 +344,9 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     final delta = d.focalPoint - _lastFocal;
     _lastFocal = d.focalPoint;
 
-    // Two fingers (or Move tool) → scroll the page; two fingers also pinch-zoom.
-    if (_tool == _Tool.move || d.pointerCount >= 2) {
+    // Two fingers (or Move tool, or pen-only finger) → scroll; two fingers
+    // also pinch-zoom.
+    if (_scrolling || _tool == _Tool.move || d.pointerCount >= 2) {
       _scrolling = true;
       if (_current != null) setState(() => _current = null);
       if (d.pointerCount >= 2 && d.scale != 1.0) {
@@ -384,7 +422,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       setState(() {
         _strokes.add(_current!);
         _current = null;
-        _dirty = true;
+        _markDirty();
       });
     }
     _boxStart = null;
@@ -393,9 +431,9 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
 
   /// Adds inertia after a two-finger scroll so it doesn't stop dead.
   void _flingScroll(double velocityY) {
-    if (!_scrollController.hasClients || velocityY.abs() < 80) return;
+    if (!_scrollController.hasClients || velocityY.abs() < 50) return;
     final max = _scrollController.position.maxScrollExtent;
-    final target = (_scrollController.offset - velocityY * 0.25).clamp(
+    final target = (_scrollController.offset - velocityY * 0.35).clamp(
       0.0,
       max,
     );
@@ -403,8 +441,8 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     if (dist < 1) return;
     _scrollController.animateTo(
       target,
-      duration: Duration(milliseconds: (dist * 1.2).clamp(150, 700).toInt()),
-      curve: Curves.decelerate,
+      duration: Duration(milliseconds: (dist * 1.3).clamp(150, 900).toInt()),
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -432,7 +470,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
   void _eraseAt(Offset p) {
     final before = _strokes.length;
     _strokes.removeWhere((s) => s.points.any((pt) => (pt - p).distance < 14));
-    if (_strokes.length != before) setState(() => _dirty = true);
+    if (_strokes.length != before) setState(() => _markDirty());
   }
 
   Future<void> _addSidenoteAt(Offset p) async {
@@ -440,7 +478,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
     if (text == null || text.trim().isEmpty) return;
     setState(() {
       _sidenotes.add(_Sidenote(p, text.trim()));
-      _dirty = true;
+      _markDirty();
     });
   }
 
@@ -460,7 +498,7 @@ class _NoteAnnotateScreenState extends ConsumerState<NoteAnnotateScreen> {
       } else {
         _sidenotes[i].text = result;
       }
-      _dirty = true;
+      _markDirty();
     });
   }
 
@@ -560,7 +598,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
     if (_strokes.isEmpty) return;
     setState(() {
       _strokes.removeLast();
-      _dirty = true;
+      _markDirty();
     });
   }
 
@@ -588,7 +626,7 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
       _strokes.clear();
       _sidenotes.clear();
       _boxRect = null;
-      _dirty = true;
+      _markDirty();
     });
   }
 
@@ -616,6 +654,22 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
             overflow: TextOverflow.ellipsis,
           ),
           actions: [
+            IconButton(
+              tooltip: AnnotatePrefs.instance.penOnly
+                  ? 'Pen only — finger scrolls'
+                  : 'Finger draws — tap for pen-only',
+              icon: Icon(
+                AnnotatePrefs.instance.penOnly
+                    ? Icons.draw_rounded
+                    : Icons.touch_app_rounded,
+                color: AnnotatePrefs.instance.penOnly ? AppColors.primary : null,
+              ),
+              onPressed: () async {
+                await AnnotatePrefs.instance
+                    .setPenOnly(!AnnotatePrefs.instance.penOnly);
+                if (mounted) setState(() {});
+              },
+            ),
             IconButton(
               tooltip: 'Page zoom',
               icon: const Icon(Icons.zoom_in_rounded),
@@ -838,16 +892,20 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
                           ),
                         ),
                       // Gesture capture: 1 finger = tool / Move-pan, 2 fingers =
-                      // pinch-zoom + pan (handled in _onScaleUpdate).
+                      // pinch-zoom + pan (handled in _onScaleUpdate). The
+                      // Listener records the pointer kind for pen-only mode.
                       Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onScaleStart: _onScaleStart,
-                          onScaleUpdate: _onScaleUpdate,
-                          onScaleEnd: _onScaleEnd,
-                          onTapUp: _tool == _Tool.sidenote
-                              ? (d) => _addSidenoteAt(d.localPosition)
-                              : null,
+                        child: Listener(
+                          onPointerDown: (e) => _downKind = e.kind,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: _onScaleUpdate,
+                            onScaleEnd: _onScaleEnd,
+                            onTapUp: _tool == _Tool.sidenote
+                                ? (d) => _addSidenoteAt(d.localPosition)
+                                : null,
+                          ),
                         ),
                       ),
                       // Sidenote markers (above gesture so they stay tappable)
@@ -922,29 +980,70 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
               if (showColors)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (var i = 0; i < _penColors.length; i++)
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (var i = 0; i < _penColors.length; i++)
+                          GestureDetector(
+                            onTap: () => setState(() => _colorIndex = i),
+                            child: Container(
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: Color(_penColors[i]),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _colorIndex == i
+                                      ? (isDark
+                                          ? Colors.white
+                                          : Colors.black87)
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Custom colour swatch (tap to open the picker).
                         GestureDetector(
-                          onTap: () => setState(() => _colorIndex = i),
+                          onTap: _pickCustomColor,
                           child: Container(
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             width: 26,
                             height: 26,
                             decoration: BoxDecoration(
-                              color: Color(_penColors[i]),
+                              color: _customColor != null
+                                  ? Color(_customColor!)
+                                  : null,
+                              gradient: _customColor == null
+                                  ? const SweepGradient(colors: [
+                                      Color(0xFFEF4444),
+                                      Color(0xFFF59E0B),
+                                      Color(0xFF22C55E),
+                                      Color(0xFF3B82F6),
+                                      Color(0xFFA855F7),
+                                      Color(0xFFEF4444),
+                                    ])
+                                  : null,
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: _colorIndex == i
+                                color: _colorIndex >= _penColors.length
                                     ? (isDark ? Colors.white : Colors.black87)
                                     : Colors.transparent,
                                 width: 2,
                               ),
                             ),
+                            child: _customColor == null
+                                ? const Icon(Icons.add,
+                                    size: 14, color: Colors.white)
+                                : null,
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               if (showColors)
@@ -1087,6 +1186,69 @@ ${h.isEmpty ? 'Write a brief, useful study margin-note for this topic.' : 'Write
           ),
         ),
       ),
+    );
+  }
+}
+
+// Simple HSV custom colour picker (hue / saturation / brightness sliders).
+class _ColorPickerDialog extends StatefulWidget {
+  final int initial;
+  const _ColorPickerDialog({required this.initial});
+
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late HSVColor _hsv = HSVColor.fromColor(Color(widget.initial));
+
+  Widget _sliderRow(
+      String label, double value, double max, ValueChanged<double> onChanged) {
+    return Row(
+      children: [
+        SizedBox(width: 74, child: Text(label, style: const TextStyle(fontSize: 12))),
+        Expanded(
+          child: Slider(value: value, max: max, onChanged: onChanged),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _hsv.toColor();
+    return AlertDialog(
+      title: const Text('Custom colour'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.black12),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _sliderRow('Hue', _hsv.hue, 360,
+              (v) => setState(() => _hsv = _hsv.withHue(v))),
+          _sliderRow('Saturation', _hsv.saturation, 1,
+              (v) => setState(() => _hsv = _hsv.withSaturation(v))),
+          _sliderRow('Brightness', _hsv.value, 1,
+              (v) => setState(() => _hsv = _hsv.withValue(v))),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(color.toARGB32()),
+          child: const Text('Use'),
+        ),
+      ],
     );
   }
 }

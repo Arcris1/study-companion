@@ -3,6 +3,18 @@
 All notable changes to StudyCompanion.
 Format: [version] — date — change.
 
+## [1.9.1] — 2026-07-02
+
+### Fix — DeepSeek latest models
+- Default DeepSeek model updated to **deepseek-v4-flash** (deepseek-chat/-reasoner deprecate 2026-07-24). Settings hint now lists deepseek-v4-flash / deepseek-v4-pro.
+
+## [1.9.0] — 2026-07-02
+
+### Feature — Quizzes, annotate & DeepSeek (tester requests)
+- **Quizzes up to 100 questions**, generated in batches so large quizzes aren't truncated. Tap the count to **type an exact number**.
+- **Annotate:** custom colour picker (+ more presets), **auto-save after every edit**, **pen-only mode** (a finger scrolls, only a stylus draws — palm rejection), and smoother scroll momentum.
+- **DeepSeek integration:** choose OpenAI or DeepSeek for text generation (chat, quizzes, flashcards, summaries) in Settings → AI. Add your DeepSeek key + model (deepseek-chat / deepseek-reasoner). Search indexing (embeddings) and image OCR still use OpenAI.
+
 ## [1.8.3] — 2026-06-29
 
 ### Fix — "PDF file unavailable" after an update (iOS)

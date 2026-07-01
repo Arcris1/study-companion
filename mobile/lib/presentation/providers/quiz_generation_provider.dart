@@ -62,7 +62,7 @@ class QuizConfigNotifier extends Notifier<QuizConfig> {
   }
 
   void setQuestionCount(int count) {
-    state = state.copyWith(questionCount: count.clamp(5, 30));
+    state = state.copyWith(questionCount: count.clamp(5, 100));
   }
 
   void setStyle(QuizStyle style) {

@@ -25,8 +25,10 @@ void main() async {
 
   // Load the saved OpenAI API key into the in-memory client so the AI
   // services report ready without an async lookup.
-  final apiKey = await ApiKeyStore().read();
+  final keyStore = ApiKeyStore();
+  final apiKey = await keyStore.read();
   OpenAiClient.instance.setApiKey(apiKey);
+  OpenAiClient.instance.setDeepseekApiKey(await keyStore.readDeepseek());
 
   // Onboarding is complete once an API key has been configured.
   final hasApiKey = OpenAiClient.instance.hasKey;

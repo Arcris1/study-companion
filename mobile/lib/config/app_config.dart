@@ -18,7 +18,7 @@ class AppConfig {
   // Quiz
   static const int defaultQuizQuestions = 10;
   static const int minQuizQuestions = 5;
-  static const int maxQuizQuestions = 30;
+  static const int maxQuizQuestions = 100;
 
   // ─── OpenAI (cloud AI backend) ──────────────────────────────────────
   static const String openAiBaseUrl = 'https://api.openai.com/v1';
@@ -28,6 +28,12 @@ class AppConfig {
   // HnswIndex dimension on NoteChunkModel.embedding — currently 384).
   static const String openAiEmbeddingModel = 'text-embedding-3-small';
   static const int embeddingDimensions = 384;
+
+  // DeepSeek (OpenAI-compatible API). Used for text generation only — DeepSeek
+  // has no embeddings/vision, so those stay on OpenAI.
+  static const String deepseekBaseUrl = 'https://api.deepseek.com';
+  // Latest models (deepseek-chat/-reasoner deprecate 2026-07-24).
+  static const String deepseekChatModel = 'deepseek-v4-flash';
 
   // ─── Feature flags ──────────────────────────────────────────────────
   // Voice dictation (mic button) in the chat screen. Hidden for now but the

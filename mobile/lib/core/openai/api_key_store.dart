@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// lives only on-device and is sent directly to the OpenAI API.
 class ApiKeyStore {
   static const _key = 'openai_api_key';
+  static const _deepseekKey = 'deepseek_api_key';
 
   final FlutterSecureStorage _storage;
 
@@ -22,6 +23,14 @@ class ApiKeyStore {
     final v = await read();
     return v != null && v.trim().isNotEmpty;
   }
+
+  // DeepSeek key (text generation only).
+  Future<String?> readDeepseek() => _storage.read(key: _deepseekKey);
+
+  Future<void> writeDeepseek(String value) =>
+      _storage.write(key: _deepseekKey, value: value.trim());
+
+  Future<void> deleteDeepseek() => _storage.delete(key: _deepseekKey);
 }
 
 final apiKeyStoreProvider = Provider<ApiKeyStore>((ref) => ApiKeyStore());

@@ -78,13 +78,36 @@ class AiConfig {
 
   static const _chatModelKey = 'ai_chat_model';
   static const _embeddingModelKey = 'ai_embedding_model';
+  static const _providerKey = 'ai_llm_provider';
+  static const _deepseekModelKey = 'ai_deepseek_model';
   String _chatModel = AppConfig.openAiChatModel;
   String _embeddingModel = AppConfig.openAiEmbeddingModel;
+  String _llmProvider = 'openai'; // 'openai' | 'deepseek' (text generation)
+  String _deepseekModel = AppConfig.deepseekChatModel;
 
   String get chatModel => _chatModel;
   String get embeddingModel => _embeddingModel;
   String get defaultChatModel => AppConfig.openAiChatModel;
   String get defaultEmbeddingModel => AppConfig.openAiEmbeddingModel;
+
+  /// Text-generation provider: 'openai' or 'deepseek'. Embeddings + vision
+  /// always use OpenAI (DeepSeek has neither).
+  String get llmProvider => _llmProvider;
+  String get deepseekModel => _deepseekModel;
+  bool get usingDeepseek => _llmProvider == 'deepseek';
+
+  Future<void> setLlmProvider(String value) async {
+    _llmProvider = value == 'deepseek' ? 'deepseek' : 'openai';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_providerKey, _llmProvider);
+  }
+
+  Future<void> setDeepseekModel(String value) async {
+    final v = value.trim();
+    _deepseekModel = v.isEmpty ? AppConfig.deepseekChatModel : v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_deepseekModelKey, _deepseekModel);
+  }
 
   String _promptKey(String k) => 'ai_prompt_$k';
   String _tokenKey(String k) => 'ai_tokens_$k';
@@ -100,6 +123,9 @@ class AiConfig {
     _chatModel = prefs.getString(_chatModelKey) ?? AppConfig.openAiChatModel;
     _embeddingModel =
         prefs.getString(_embeddingModelKey) ?? AppConfig.openAiEmbeddingModel;
+    _llmProvider = prefs.getString(_providerKey) ?? 'openai';
+    _deepseekModel =
+        prefs.getString(_deepseekModelKey) ?? AppConfig.deepseekChatModel;
   }
 
   Future<void> setChatModel(String value) async {

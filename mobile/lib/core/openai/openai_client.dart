@@ -35,6 +35,41 @@ class OpenAiClient {
         'Authorization': 'Bearer $_apiKey',
       };
 
+  Map<String, String> _keyHeaders(String? key) => {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $key',
+      };
+
+  // ─── Text-generation provider routing (OpenAI or DeepSeek) ──────────
+  // Embeddings + vision always use OpenAI; only chat/completions can be
+  // routed to DeepSeek (it has no embeddings/vision API).
+
+  String? _deepseekKey;
+
+  void setDeepseekApiKey(String? key) {
+    final t = key?.trim();
+    _deepseekKey = (t != null && t.isNotEmpty) ? t : null;
+  }
+
+  bool get hasDeepseekKey => _deepseekKey != null;
+
+  /// Whether the active text-generation provider has a key configured.
+  bool get hasTextKey =>
+      AiConfig.instance.usingDeepseek ? _deepseekKey != null : hasKey;
+
+  ({String baseUrl, String? key, String model}) get _textTarget =>
+      AiConfig.instance.usingDeepseek
+          ? (
+              baseUrl: AppConfig.deepseekBaseUrl,
+              key: _deepseekKey,
+              model: AiConfig.instance.deepseekModel,
+            )
+          : (
+              baseUrl: AppConfig.openAiBaseUrl,
+              key: _apiKey,
+              model: AiConfig.instance.chatModel,
+            );
+
   // ─── Chat completions ───────────────────────────────────────────────
 
   Future<String> chat(
@@ -43,12 +78,13 @@ class OpenAiClient {
     double temperature = 0.7,
     bool jsonMode = false,
   }) async {
-    if (!hasKey) throw const LlmException('OpenAI API key not set');
+    final t = _textTarget;
+    if (t.key == null) throw const LlmException('AI API key not set');
     final res = await _post(
-      Uri.parse('${AppConfig.openAiBaseUrl}/chat/completions'),
-      headers: _headers,
+      Uri.parse('${t.baseUrl}/chat/completions'),
+      headers: _keyHeaders(t.key),
       body: jsonEncode({
-        'model': AiConfig.instance.chatModel,
+        'model': t.model,
         'messages': messages,
         'max_tokens': maxTokens,
         'temperature': temperature,
@@ -57,7 +93,7 @@ class OpenAiClient {
     );
     if (res.statusCode != 200) {
       throw LlmException(
-          'OpenAI chat failed (${res.statusCode}): ${_errorMessage(res.body)}');
+          'Chat failed (${res.statusCode}): ${_errorMessage(res.body)}');
     }
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final choices = data['choices'] as List?;
@@ -72,14 +108,15 @@ class OpenAiClient {
     int maxTokens = 1024,
     double temperature = 0.7,
   }) async* {
-    if (!hasKey) throw const LlmException('OpenAI API key not set');
+    final t = _textTarget;
+    if (t.key == null) throw const LlmException('AI API key not set');
     final request = http.Request(
       'POST',
-      Uri.parse('${AppConfig.openAiBaseUrl}/chat/completions'),
+      Uri.parse('${t.baseUrl}/chat/completions'),
     );
-    request.headers.addAll(_headers);
+    request.headers.addAll(_keyHeaders(t.key));
     request.body = jsonEncode({
-      'model': AiConfig.instance.chatModel,
+      'model': t.model,
       'messages': messages,
       'max_tokens': maxTokens,
       'temperature': temperature,
@@ -90,7 +127,7 @@ class OpenAiClient {
     if (response.statusCode != 200) {
       final body = await response.stream.bytesToString();
       throw LlmException(
-          'OpenAI chat failed (${response.statusCode}): ${_errorMessage(body)}');
+          'Chat failed (${response.statusCode}): ${_errorMessage(body)}');
     }
 
     await for (final line in response.stream

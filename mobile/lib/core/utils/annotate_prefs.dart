@@ -8,7 +8,18 @@ class AnnotatePrefs {
   static final AnnotatePrefs instance = AnnotatePrefs._();
 
   static const _key = 'annotate_mode_notes';
+  static const _penOnlyKey = 'annotate_pen_only';
   final Set<int> _notes = {};
+
+  /// When true, only a stylus draws; a finger scrolls/pans (palm rejection).
+  bool _penOnly = false;
+  bool get penOnly => _penOnly;
+
+  Future<void> setPenOnly(bool value) async {
+    _penOnly = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_penOnlyKey, value);
+  }
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -16,6 +27,7 @@ class AnnotatePrefs {
     _notes
       ..clear()
       ..addAll(list.map(int.tryParse).whereType<int>());
+    _penOnly = prefs.getBool(_penOnlyKey) ?? false;
   }
 
   bool isAnnotate(int noteId) => _notes.contains(noteId);

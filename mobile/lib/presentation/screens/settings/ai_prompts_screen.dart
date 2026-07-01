@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../../../config/theme/shadows.dart';
 import '../../../config/theme/spacing.dart';
 import '../../../core/ai/ai_config.dart';
+import '../../../core/openai/api_key_store.dart';
+import '../../../core/openai/openai_client.dart';
 
 /// Lets the user view/edit the system prompt + token limit for each AI
 /// feature, and reset any (or all) back to defaults.
@@ -20,6 +22,10 @@ class _AiPromptsScreenState extends State<AiPromptsScreen> {
       TextEditingController(text: AiConfig.instance.chatModel);
   late final TextEditingController _embeddingModelCtrl =
       TextEditingController(text: AiConfig.instance.embeddingModel);
+  late final TextEditingController _deepseekModelCtrl =
+      TextEditingController(text: AiConfig.instance.deepseekModel);
+  final TextEditingController _deepseekKeyCtrl = TextEditingController();
+  String _provider = AiConfig.instance.llmProvider;
 
   @override
   void initState() {
@@ -29,6 +35,22 @@ class _AiPromptsScreenState extends State<AiPromptsScreen> {
           TextEditingController(text: AiConfig.instance.systemPrompt(op));
       _tokenCtrls[op] =
           TextEditingController(text: AiConfig.instance.tokenLimit(op).toString());
+    }
+    ApiKeyStore().readDeepseek().then((k) {
+      if (mounted && k != null && k.isNotEmpty) _deepseekKeyCtrl.text = k;
+    });
+  }
+
+  Future<void> _saveDeepseek() async {
+    await AiConfig.instance.setLlmProvider(_provider);
+    await AiConfig.instance.setDeepseekModel(_deepseekModelCtrl.text);
+    final key = _deepseekKeyCtrl.text.trim();
+    if (key.isEmpty) {
+      await ApiKeyStore().deleteDeepseek();
+      OpenAiClient.instance.setDeepseekApiKey(null);
+    } else {
+      await ApiKeyStore().writeDeepseek(key);
+      OpenAiClient.instance.setDeepseekApiKey(key);
     }
   }
 
@@ -42,6 +64,8 @@ class _AiPromptsScreenState extends State<AiPromptsScreen> {
     }
     _chatModelCtrl.dispose();
     _embeddingModelCtrl.dispose();
+    _deepseekModelCtrl.dispose();
+    _deepseekKeyCtrl.dispose();
     super.dispose();
   }
 
@@ -111,6 +135,85 @@ class _AiPromptsScreenState extends State<AiPromptsScreen> {
     );
   }
 
+  Widget _buildProviderCard(ThemeData theme, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(Spacing.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: Spacing.borderRadiusMd,
+        boxShadow: isDark ? AppShadows.level1Dark : AppShadows.level1,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hub_rounded,
+                  size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: Spacing.sm),
+              Text('Text generation provider',
+                  style: theme.textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: Spacing.sm),
+          Text(
+            'DeepSeek powers chat, quizzes, flashcards & summaries. Search '
+            'indexing (embeddings) and image OCR always use OpenAI, so keep an '
+            'OpenAI key set for those.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: Spacing.md),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'openai', label: Text('OpenAI')),
+              ButtonSegment(value: 'deepseek', label: Text('DeepSeek')),
+            ],
+            selected: {_provider},
+            onSelectionChanged: (s) => setState(() => _provider = s.first),
+          ),
+          if (_provider == 'deepseek') ...[
+            const SizedBox(height: Spacing.md),
+            TextField(
+              controller: _deepseekKeyCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'DeepSeek API key',
+                hintText: 'sk-...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: Spacing.sm),
+            TextField(
+              controller: _deepseekModelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'DeepSeek model',
+                helperText: 'deepseek-v4-flash (fast) · deepseek-v4-pro (stronger)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+          const SizedBox(height: Spacing.md),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: () async {
+                await _saveDeepseek();
+                if (!mounted) return;
+                setState(() {});
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('AI provider saved')),
+                );
+              },
+              child: const Text('Save provider'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -164,6 +267,8 @@ class _AiPromptsScreenState extends State<AiPromptsScreen> {
               });
             },
           ),
+          const SizedBox(height: Spacing.md),
+          _buildProviderCard(theme, isDark),
           const SizedBox(height: Spacing.md),
           for (final op in AiOp.values) ...[
             _OpCard(

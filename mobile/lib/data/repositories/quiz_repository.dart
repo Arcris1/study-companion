@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../../core/ai/ai_config.dart';
 import '../../core/text/content_sampler.dart';
 import '../../core/llm/llm_service.dart';
 import '../../core/llm/prompt_templates.dart';
@@ -63,140 +62,145 @@ class QuizRepository implements IQuizRepository {
           'No readable text in these notes (a scanned PDF has no extractable text).');
     }
 
-    final actualCount = questionCount.clamp(1, 30);
+    final actualCount = questionCount.clamp(1, 100);
 
-    final prompt = PromptTemplates.generateQuiz(
-      content: selectedContent,
-      numQuestions: actualCount,
-      questionType: questionType.name,
-      difficulty: difficulty.name,
-      styleInstruction: style.promptInstruction,
-    );
-
-    // Scale tokens with the question count so large (and situational) quizzes
-    // aren't truncated — this is why "20 requested" used to return only ~18.
-    final base = AiConfig.instance.tokenLimit(AiOp.quiz);
-    final scaled = actualCount * 400 + 800;
-    // Floor at the configured limit, but always cap at the model's safe ceiling.
-    final maxTokens = (scaled > base ? scaled : base).clamp(800, 12000);
-
-    final response = await _llmService.generate(
-      prompt,
-      maxTokens: maxTokens,
-    );
-
-    // Parse JSON response — try multiple strategies
-    List<QuizQuestionModel> questionModels;
-    try {
-      List questions;
-      final r = response.trim();
+    // Generate in batches so large quizzes aren't truncated (a single call
+    // can't reliably return ~100 questions).
+    const batchSize = 25;
+    final rawQuestions = <dynamic>[];
+    var remaining = actualCount;
+    while (remaining > 0) {
+      final n = remaining < batchSize ? remaining : batchSize;
+      final prompt = PromptTemplates.generateQuiz(
+        content: selectedContent,
+        numQuestions: n,
+        questionType: questionType.name,
+        difficulty: difficulty.name,
+        styleInstruction: style.promptInstruction,
+      );
+      final maxTokens = (n * 400 + 800).clamp(800, 12000);
       try {
-        // Strategy 1: Response continues from prompt's {"questions": [
-        questions =
-            (jsonDecode('{"questions": [$r') as Map)['questions'] as List;
+        final response =
+            await _llmService.generate(prompt, maxTokens: maxTokens);
+        rawQuestions.addAll(_parseQuestions(response));
       } catch (_) {
-        try {
-          // Strategy 2: Response is complete JSON with {"questions": [...]}
-          questions = (jsonDecode(r) as Map)['questions'] as List;
-        } catch (_) {
-          try {
-            // Strategy 3: Response is just a JSON array [...]
-            questions = jsonDecode(r) as List;
-          } catch (_) {
-            // Strategy 4: Salvage a truncated array by closing it at the last
-            // complete object, so we keep every question that was generated.
-            final lastBrace = r.lastIndexOf('}');
-            if (lastBrace != -1) {
-              questions = (jsonDecode(
-                      '{"questions": [${r.substring(0, lastBrace + 1)}]}')
-                  as Map)['questions'] as List;
-            } else {
-              final jsonMatch = RegExp(r'\[[\s\S]*\]').firstMatch(r);
-              if (jsonMatch != null) {
-                questions = jsonDecode(jsonMatch.group(0)!) as List;
-              } else {
-                throw const FormatException('No valid JSON found');
-              }
-            }
-          }
-        }
+        // A single failed batch shouldn't abort the whole quiz.
       }
-
-      // Create quiz first
-      final quizModel = _quizDatasource.createQuiz(QuizModel(
-        notebookId: notebookId,
-        title: title,
-        questionTypeStr: questionType.name,
-        difficultyStr: difficulty.name,
-        questionCount: questionCount,
-        createdAt: DateTime.now(),
-      ));
-
-      // Map defensively: skip malformed entries so one bad question doesn't
-      // throw away the whole quiz (the model occasionally omits a field).
-      questionModels = <QuizQuestionModel>[];
-      for (final raw in questions) {
-        if (raw is! Map) continue;
-        final text = raw['question'];
-        final answer = raw['correct_answer'];
-        if (text is! String || text.trim().isEmpty || answer == null) continue;
-        questionModels.add(QuizQuestionModel(
-          quizId: quizModel.id,
-          question: text,
-          typeStr: questionType.name,
-          optionsJson: jsonEncode(raw['options'] ?? []),
-          correctAnswer: answer.toString(),
-          explanation: raw['explanation']?.toString(),
-          questionIndex: questionModels.length,
-          topic: raw['topic']?.toString(),
-        ));
-      }
-
-      if (questionModels.isEmpty) {
-        questionModels.add(QuizQuestionModel(
-          quizId: quizModel.id,
-          question:
-              'Quiz generation failed. Please try again with different settings.',
-          typeStr: QuestionType.mcq.name,
-          optionsJson: jsonEncode([
-            'Try again',
-            'Adjust settings',
-            'Use different notes',
-            'All of the above'
-          ]),
-          correctAnswer: 'All of the above',
-          explanation: 'The AI response could not be parsed into questions.',
-          questionIndex: 0,
-        ));
-      }
-
-      _quizDatasource.saveQuestions(questionModels);
-      return quizModel.toEntity();
-    } catch (e) {
-      // If parsing fails, create a simple fallback quiz
-      final quizModel = _quizDatasource.createQuiz(QuizModel(
-        notebookId: notebookId,
-        title: title,
-        questionTypeStr: questionType.name,
-        difficultyStr: difficulty.name,
-        questionCount: 1,
-        createdAt: DateTime.now(),
-      ));
-
-      _quizDatasource.saveQuestions([
-        QuizQuestionModel(
-          quizId: quizModel.id,
-          question: 'Quiz generation failed. Please try again with different settings.',
-          typeStr: QuestionType.mcq.name,
-          optionsJson: jsonEncode(['Try again', 'Adjust settings', 'Use different notes', 'All of the above']),
-          correctAnswer: 'All of the above',
-          explanation: 'The LLM response could not be parsed into quiz questions.',
-          questionIndex: 0,
-        ),
-      ]);
-
-      return quizModel.toEntity();
+      remaining -= n;
     }
+
+    if (rawQuestions.isEmpty) {
+      return _fallbackQuiz(notebookId, title, questionType, difficulty);
+    }
+
+    final quizModel = _quizDatasource.createQuiz(QuizModel(
+      notebookId: notebookId,
+      title: title,
+      questionTypeStr: questionType.name,
+      difficultyStr: difficulty.name,
+      questionCount: actualCount,
+      createdAt: DateTime.now(),
+    ));
+
+    // Map defensively: skip malformed entries so one bad question doesn't
+    // throw away the whole quiz.
+    final questionModels = <QuizQuestionModel>[];
+    for (final raw in rawQuestions) {
+      if (raw is! Map) continue;
+      final text = raw['question'];
+      final answer = raw['correct_answer'];
+      if (text is! String || text.trim().isEmpty || answer == null) continue;
+      questionModels.add(QuizQuestionModel(
+        quizId: quizModel.id,
+        question: text,
+        typeStr: questionType.name,
+        optionsJson: jsonEncode(raw['options'] ?? []),
+        correctAnswer: answer.toString(),
+        explanation: raw['explanation']?.toString(),
+        questionIndex: questionModels.length,
+        topic: raw['topic']?.toString(),
+      ));
+    }
+
+    if (questionModels.isEmpty) {
+      questionModels.add(QuizQuestionModel(
+        quizId: quizModel.id,
+        question:
+            'Quiz generation failed. Please try again with different settings.',
+        typeStr: QuestionType.mcq.name,
+        optionsJson: jsonEncode([
+          'Try again',
+          'Adjust settings',
+          'Use different notes',
+          'All of the above'
+        ]),
+        correctAnswer: 'All of the above',
+        explanation: 'The AI response could not be parsed into questions.',
+        questionIndex: 0,
+      ));
+    }
+
+    _quizDatasource.saveQuestions(questionModels);
+    return quizModel.toEntity();
+  }
+
+  /// Best-effort parse of a quiz LLM response into a raw questions list.
+  List _parseQuestions(String response) {
+    final r = response.trim();
+    try {
+      return (jsonDecode('{"questions": [$r') as Map)['questions'] as List;
+    } catch (_) {}
+    try {
+      return (jsonDecode(r) as Map)['questions'] as List;
+    } catch (_) {}
+    try {
+      return jsonDecode(r) as List;
+    } catch (_) {}
+    // Salvage a truncated array by closing it at the last complete object.
+    final lastBrace = r.lastIndexOf('}');
+    if (lastBrace != -1) {
+      try {
+        return (jsonDecode('{"questions": [${r.substring(0, lastBrace + 1)}]}')
+            as Map)['questions'] as List;
+      } catch (_) {}
+    }
+    final m = RegExp(r'\[[\s\S]*\]').firstMatch(r);
+    if (m != null) {
+      try {
+        return jsonDecode(m.group(0)!) as List;
+      } catch (_) {}
+    }
+    return const [];
+  }
+
+  Quiz _fallbackQuiz(int notebookId, String title, QuestionType questionType,
+      DifficultyLevel difficulty) {
+    final quizModel = _quizDatasource.createQuiz(QuizModel(
+      notebookId: notebookId,
+      title: title,
+      questionTypeStr: questionType.name,
+      difficultyStr: difficulty.name,
+      questionCount: 1,
+      createdAt: DateTime.now(),
+    ));
+    _quizDatasource.saveQuestions([
+      QuizQuestionModel(
+        quizId: quizModel.id,
+        question:
+            'Quiz generation failed. Please try again with different settings.',
+        typeStr: QuestionType.mcq.name,
+        optionsJson: jsonEncode([
+          'Try again',
+          'Adjust settings',
+          'Use different notes',
+          'All of the above'
+        ]),
+        correctAnswer: 'All of the above',
+        explanation: 'The LLM response could not be parsed into quiz questions.',
+        questionIndex: 0,
+      ),
+    ]);
+    return quizModel.toEntity();
   }
 
   @override

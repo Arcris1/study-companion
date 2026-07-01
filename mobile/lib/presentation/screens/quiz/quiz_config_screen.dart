@@ -593,9 +593,11 @@ class _QuestionCountStepper extends StatelessWidget {
             ),
             const SizedBox(width: Spacing.md),
 
-            // Count display
-            SizedBox(
-              width: 48,
+            // Count display (tap to type an exact number)
+            GestureDetector(
+              onTap: () => _promptForCount(context),
+              child: SizedBox(
+              width: 56,
               child: AnimatedSwitcher(
                 duration: AppAnimations.durationFast,
                 transitionBuilder: (child, animation) {
@@ -619,6 +621,7 @@ class _QuestionCountStepper extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
+              ),
               ),
             ),
             const SizedBox(width: Spacing.md),
@@ -661,6 +664,66 @@ class _QuestionCountStepper extends StatelessWidget {
             fontSize: 10,
           ),
         ),
+      ],
+    );
+  }
+
+  Future<void> _promptForCount(BuildContext context) async {
+    final result = await showDialog<int>(
+      context: context,
+      builder: (_) => _CountInputDialog(initial: count, min: min, max: max),
+    );
+    if (result != null) onChanged(result.clamp(min, max));
+  }
+}
+
+// Lets the user type an exact question count (handy for large quizzes).
+class _CountInputDialog extends StatefulWidget {
+  final int initial;
+  final int min;
+  final int max;
+  const _CountInputDialog(
+      {required this.initial, required this.min, required this.max});
+
+  @override
+  State<_CountInputDialog> createState() => _CountInputDialogState();
+}
+
+class _CountInputDialogState extends State<_CountInputDialog> {
+  late final TextEditingController _ctrl =
+      TextEditingController(text: widget.initial.toString());
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final v = int.tryParse(_ctrl.text.trim());
+    Navigator.of(context).pop(v?.clamp(widget.min, widget.max));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Number of questions'),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          helperText: '${widget.min}–${widget.max}',
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(onPressed: _submit, child: const Text('Set')),
       ],
     );
   }
